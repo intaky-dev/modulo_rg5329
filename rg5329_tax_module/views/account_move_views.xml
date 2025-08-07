@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="account_move_form_rg5329" model="ir.ui.view">
+            <field name="name">account.move.form.rg5329</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_move_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='invoice_line_ids']" position="after">
+                    <group string="Percepción RG 5329" name="rg5329_group">
+                        <field name="rg5329_base_amount"
+                               modifiers='{"invisible": [["rg5329_base_amount", "=", 0]]}'
+                               string="Base RG 5329"/>
+                        <field name="rg5329_perception_amount"
+                               modifiers='{"invisible": [["rg5329_perception_amount", "=", 0]]}'
+                               string="Percepción RG 5329"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

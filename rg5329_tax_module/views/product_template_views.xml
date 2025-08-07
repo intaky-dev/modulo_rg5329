@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Product Template Form View Extension -->
+        <record id="product_template_form_rg5329" model="ir.ui.view">
+            <field name="name">product.template.form.rg5329</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='group_general']" position="inside">
+                    <field name="apply_rg5329"/>
+                    <field name="rg5329_perception_rate"
+                           modifiers='{"invisible": [["apply_rg5329", "=", false]],
+                                        "required": [["apply_rg5329", "=", true]]}'/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Product Variant Form View Extension -->
+        <record id="product_variant_form_rg5329" model="ir.ui.view">
+            <field name="name">product.product.form.rg5329</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="product.product_normal_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='group_general']" position="inside">
+                    <field name="apply_rg5329"/>
+                    <field name="rg5329_perception_rate"
+                           modifiers='{"invisible": [["apply_rg5329", "=", false]],
+                                        "required": [["apply_rg5329", "=", true]]}'/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>
