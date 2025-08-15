@@ -12,11 +12,11 @@
 
         <!-- Impuestos de percepción RG 5329 -->
         <record id="tax_perception_rg5329_3" model="account.tax">
-            <field name="name">Percepcion IVA RG 5329 - 3%</field>
+            <field name="name">Percepción IVA RG 5329 - 3%</field>
             <field name="type_tax_use">sale</field>
             <field name="amount_type">percent</field>
             <field name="amount">3.0</field>
-            <field name="description">Percepcion 3% para productos con IVA 21%</field>
+            <field name="description">Percepción 3% para productos con IVA 21%</field>
             <field name="active">True</field>
             <field name="sequence">10</field>
             <field name="invoice_repartition_line_ids" eval="[
@@ -30,11 +30,11 @@
         </record>
         
         <record id="tax_perception_rg5329_1_5" model="account.tax">
-            <field name="name">Percepcion IVA RG 5329 - 1,5%</field>
+            <field name="name">Percepción IVA RG 5329 - 1,5%</field>
             <field name="type_tax_use">sale</field>
             <field name="amount_type">percent</field>
             <field name="amount">1.5</field>
-            <field name="description">Percepcion 1,5% para productos con IVA 10,5%</field>
+            <field name="description">Percepción 1,5% para productos con IVA 10,5%</field>
             <field name="active">True</field>
             <field name="sequence">11</field>
             <field name="invoice_repartition_line_ids" eval="[

@@ -5,16 +5,16 @@ class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
     apply_rg5329 = fields.Boolean(
-        string='Apply RG 5329 Perception',
+        string='Aplicar Percepción RG 5329',
         default=False,
-        help='Check if this product is subject to RG 5329 perception'
+        help='Marque si este producto está sujeto a la percepción RG 5329'
     )
     
     rg5329_perception_rate = fields.Selection([
-        ('3_percent', '3% - Products with 21% VAT'),
-        ('1_5_percent', '1.5% - Products with 10.5% VAT'),
-    ], string='RG 5329 Perception Rate',
-       help='Perception rate based on VAT category')
+        ('3_percent', '3% - Productos con IVA 21%'),
+        ('1_5_percent', '1,5% - Productos con IVA 10,5%'),
+    ], string='Tasa de Percepción RG 5329',
+       help='Tasa de percepción basada en la categoría de IVA')
 
 
 class ProductProduct(models.Model):

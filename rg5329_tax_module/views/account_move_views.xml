@@ -10,10 +10,10 @@
                     <group string="Percepción RG 5329" name="rg5329_group">
                         <field name="rg5329_base_amount"
                                modifiers='{"invisible": [["rg5329_base_amount", "=", 0]]}'
-                               string="Base RG 5329"/>
+                               string="Base Imponible RG 5329"/>
                         <field name="rg5329_perception_amount"
                                modifiers='{"invisible": [["rg5329_perception_amount", "=", 0]]}'
-                               string="Percepción RG 5329"/>
+                               string="Total Percepción RG 5329"/>
                     </group>
                 </xpath>
             </field>

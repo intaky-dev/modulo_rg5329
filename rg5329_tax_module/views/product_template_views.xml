@@ -8,9 +8,9 @@
             <field name="model">product.template</field>
             <field name="inherit_id" ref="product.product_template_form_view"/>
             <field name="arch" type="xml">
-                <xpath expr="//group[@name='group_general']" position="inside">
-                    <field name="apply_rg5329"/>
-                    <field name="rg5329_perception_rate"
+                <xpath expr="//field[@name='sale_ok']" position="after">
+                    <field name="apply_rg5329" string="Aplicar RG 5329"/>
+                    <field name="rg5329_perception_rate" string="Tasa de Percepción RG 5329"
                            modifiers='{"invisible": [["apply_rg5329", "=", false]],
                                         "required": [["apply_rg5329", "=", true]]}'/>
                 </xpath>
