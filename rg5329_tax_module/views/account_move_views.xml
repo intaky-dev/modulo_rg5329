@@ -7,11 +7,11 @@
             <field name="inherit_id" ref="account.view_move_form"/>
             <field name="arch" type="xml">
                 
-                <!-- Agregar información de percepción después del total de impuestos -->
-                <xpath expr="//field[@name='amount_tax']" position="after">
-                    <div class="oe_subtotal_footer_separator" style="margin-top: 5px;">
-                        <strong>Percepción RG 5329: <field name="rg5329_perception_amount" nolabel="1" readonly="1"/></strong>
-                    </div>
+                <!-- Agregar información de percepción en el total -->
+                <xpath expr="//field[@name='amount_total']" position="after">
+                    <field name="rg5329_perception_amount" string="Percepción RG 5329" 
+                           modifiers='{"invisible": [["rg5329_perception_amount", "=", 0]]}'
+                           readonly="1" style="font-weight: bold;"/>
                 </xpath>
             </field>
         </record>
