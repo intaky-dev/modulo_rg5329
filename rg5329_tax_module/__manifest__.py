@@ -27,8 +27,7 @@
         "security/ir.model.access.csv",
         "data/tax_data.xml",
         "views/res_partner_views.xml",
-        "views/account_tax_views.xml",
-        "views/account_move_views.xml"
+        "views/account_tax_views.xml"
     ],
     "installable": True,
     "auto_install": False,
