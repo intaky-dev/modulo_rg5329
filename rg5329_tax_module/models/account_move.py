@@ -3,17 +3,17 @@ from odoo import models, fields, api, _
 class AccountMove(models.Model):
     _inherit = 'account.move'
     
-    #rg5329_perception_amount = fields.Monetary(
-    #    string='Total Percepción RG 5329',
-    #    compute='_compute_rg5329_perception',
-    #    store=True
-    #)
+    rg5329_perception_amount = fields.Monetary(
+        string='Total Percepción RG 5329',
+        compute='_compute_rg5329_perception',
+        store=True
+    )
     
-    #rg5329_base_amount = fields.Monetary(
-    #    string='Base RG 5329',
-    #    compute='_compute_rg5329_perception',
-    #    store=True
-    #)
+    rg5329_base_amount = fields.Monetary(
+        string='Base RG 5329',
+        compute='_compute_rg5329_perception',
+        store=True
+    )
     
     @api.depends('invoice_line_ids', 'invoice_line_ids.price_subtotal')
     def _compute_rg5329_perception(self):
