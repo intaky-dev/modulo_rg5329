@@ -2,13 +2,13 @@
 <odoo>
     <data noupdate="1">
         
-        <!-- Cuenta contable para percepciones RG 5329 -->
+        <!-- Cuenta contable para percepciones RG 5329 
         <record id="account_perception_rg5329" model="account.account">
             <field name="code">21303041</field>
             <field name="name">Percepciones de IVA RG 5329</field>
             <field name="account_type">liability_current</field>
             <field name="reconcile">True</field>
-        </record>
+        </record> -->
 
         <!-- Impuestos de percepción RG 5329 -->
         <record id="tax_perception_rg5329_3" model="account.tax">
