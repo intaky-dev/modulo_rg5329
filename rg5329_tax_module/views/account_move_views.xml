@@ -7,11 +7,6 @@
             <field name="inherit_id" ref="account.view_move_form"/>
             <field name="arch" type="xml">
                 
-                <!-- Cambiar "Impuestos Internos" por "Percepción RG 5329" -->
-                <xpath expr="//label[@class='o_form_label o_tax_total_label']" position="replace">
-                    <label class="o_form_label o_tax_total_label">Percepción RG 5329</label>
-                </xpath>
-                
                 <!-- Agregar información de percepción en el total -->
                 <xpath expr="//field[@name='amount_total']" position="after">
                     <field name="rg5329_perception_amount" string="Percepción RG 5329" 
