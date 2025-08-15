@@ -33,8 +33,8 @@ class AccountMove(models.Model):
             
             move.rg5329_base_amount = base_amount
             
-            # Solo aplicar si supera $100.000
-            if base_amount >= 100000:
+            # Solo aplicar si supera $3000
+            if base_amount >= 3000:
                 for line in move.invoice_line_ids:
                     if line.product_id and line.product_id.apply_rg5329:
                         # Determinar alícuota según IVA del producto
@@ -69,14 +69,12 @@ class AccountMove(models.Model):
     
     def _create_rg5329_perception_lines(self):
         """Crea las líneas de percepción RG 5329"""
-        # Eliminar líneas de percepción existentes
         existing_lines = self.line_ids.filtered(lambda l: l.name and 'RG 5329' in l.name)
         existing_lines.unlink()
         
         if self.rg5329_perception_amount <= 0:
             return
         
-        # Buscar impuestos de percepción
         tax_3_percent = self.env['account.tax'].search([
             ('name', 'ilike', 'RG 5329'),
             ('amount', '=', 3.0),
@@ -111,9 +109,17 @@ class AccountMove(models.Model):
     
     def _create_perception_line(self, tax, amount, description):
         """Crea una línea de percepción específica"""
+        # Obtener CUIT del cliente
+        partner_cuit = self.partner_id.vat or 'Sin CUIT'
+        if partner_cuit and not partner_cuit.startswith('Sin'):
+            partner_cuit = f"CUIT: {partner_cuit}"
+        
+        # Descripción detallada con impuesto y CUIT
+        detailed_name = f'Percepción RG 5329 - {description} - {partner_cuit} - {self.partner_id.name}'
+        
         self.env['account.move.line'].create({
             'move_id': self.id,
-            'name': f'Percepción RG 5329 - {description}',
+            'name': detailed_name,
             'account_id': tax.account_id.id,
             'debit': amount if self.move_type == 'out_invoice' else 0,
             'credit': amount if self.move_type == 'out_refund' else 0,
@@ -124,7 +130,7 @@ class AccountMove(models.Model):
         counterpart_account = self.partner_id.property_account_receivable_id
         self.env['account.move.line'].create({
             'move_id': self.id,
-            'name': f'Percepción RG 5329 - {description}',
+            'name': detailed_name,
             'account_id': counterpart_account.id,
             'debit': amount if self.move_type == 'out_refund' else 0,
             'credit': amount if self.move_type == 'out_invoice' else 0,

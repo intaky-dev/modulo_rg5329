@@ -2,76 +2,39 @@
 <odoo>
     <data noupdate="1">
         
-        <!-- Cuentas contables para percepciones -->
-        <record id="account_perception_rg5329_3" model="account.account">
-            <field name="name">Percepciones de IVA RG 5329 - 3%</field>
-            <field name="code">11810001</field>
-            <field name="account_type">asset_current</field>
-            <field name="reconcile">False</field>
+        <!-- Cuenta contable para percepciones RG 5329 -->
+        <record id="account_perception_rg5329" model="account.account">
+            <field name="code">21303041</field>
+            <field name="name">Percepciones de IVA RG 5329</field>
+            <field name="account_type">liability_current</field>
+            <field name="reconcile">True</field>
         </record>
-        
-        <record id="account_perception_rg5329_1_5" model="account.account">
-            <field name="name">Percepciones de IVA RG 5329 - 1,5%</field>
-            <field name="code">11810002</field>
-            <field name="account_type">asset_current</field>
-            <field name="reconcile">False</field>
-        </record>
-        
-        <!-- Impuestos de percepción -->
+
+        <!-- Impuestos de percepción RG 5329 -->
         <record id="tax_perception_rg5329_3" model="account.tax">
-            <field name="name">Percepción IVA RG 5329 - 3%</field>
+            <field name="name">Percepcion IVA RG 5329 - 3%</field>
             <field name="type_tax_use">sale</field>
             <field name="amount_type">percent</field>
             <field name="amount">3.0</field>
-            <field name="description">Percepción 3% para productos con IVA 21%</field>
+            <field name="description">Percepcion 3% para productos con IVA 21%</field>
             <field name="active">True</field>
             <field name="sequence">10</field>
-            <field name="invoice_repartition_line_ids" eval="[
-                Command.create({
-                    'repartition_type': 'base',
-                }),
-                Command.create({
-                    'repartition_type': 'tax',
-                    'account_id': ref('account_perception_rg5329_3'),
-                }),
-            ]"/>
-            <field name="refund_repartition_line_ids" eval="[
-                Command.create({
-                    'repartition_type': 'base',
-                }),
-                Command.create({
-                    'repartition_type': 'tax',
-                    'account_id': ref('account_perception_rg5329_3'),
-                }),
-            ]"/>
+            <field name="account_id" ref="account_perception_rg5329"/>
+            <field name="is_rg5329_perception">True</field>
+            <field name="rg5329_perception_type">3_percent</field>
         </record>
         
         <record id="tax_perception_rg5329_1_5" model="account.tax">
-            <field name="name">Percepción IVA RG 5329 - 1,5%</field>
+            <field name="name">Percepcion IVA RG 5329 - 1,5%</field>
             <field name="type_tax_use">sale</field>
             <field name="amount_type">percent</field>
             <field name="amount">1.5</field>
-            <field name="description">Percepción 1,5% para productos con IVA 10,5%</field>
+            <field name="description">Percepcion 1,5% para productos con IVA 10,5%</field>
             <field name="active">True</field>
             <field name="sequence">11</field>
-            <field name="invoice_repartition_line_ids" eval="[
-                Command.create({
-                    'repartition_type': 'base',
-                }),
-                Command.create({
-                    'repartition_type': 'tax',
-                    'account_id': ref('account_perception_rg5329_1_5'),
-                }),
-            ]"/>
-            <field name="refund_repartition_line_ids" eval="[
-                Command.create({
-                    'repartition_type': 'base',
-                }),
-                Command.create({
-                    'repartition_type': 'tax',
-                    'account_id': ref('account_perception_rg5329_1_5'),
-                }),
-            ]"/>
+            <field name="account_id" ref="account_perception_rg5329"/>
+            <field name="is_rg5329_perception">True</field>
+            <field name="rg5329_perception_type">1_5_percent</field>
         </record>
         
     </data>
