@@ -39,35 +39,6 @@
             <field name="tax_group_id" ref="tax_group_rg5329"/>
         </record>
 
-        <!-- Configuración de cuentas para impuesto 3% -->
-        <record id="tax_repartition_line_3_tax" model="account.tax.repartition.line">
-            <field name="repartition_type">tax</field>
-            <field name="factor_percent">100</field>
-            <field name="account_id" ref="account_perception_rg5329"/>
-            <field name="invoice_tax_id" ref="tax_perception_rg5329_3"/>
-        </record>
-
-        <record id="tax_repartition_line_3_refund" model="account.tax.repartition.line">
-            <field name="repartition_type">tax</field>
-            <field name="factor_percent">100</field>
-            <field name="account_id" ref="account_perception_rg5329"/>
-            <field name="refund_tax_id" ref="tax_perception_rg5329_3"/>
-        </record>
-
-        <!-- Configuración de cuentas para impuesto 1.5% -->
-        <record id="tax_repartition_line_1_5_tax" model="account.tax.repartition.line">
-            <field name="repartition_type">tax</field>
-            <field name="factor_percent">100</field>
-            <field name="account_id" ref="account_perception_rg5329"/>
-            <field name="invoice_tax_id" ref="tax_perception_rg5329_1_5"/>
-        </record>
-
-        <record id="tax_repartition_line_1_5_refund" model="account.tax.repartition.line">
-            <field name="repartition_type">tax</field>
-            <field name="factor_percent">100</field>
-            <field name="account_id" ref="account_perception_rg5329"/>
-            <field name="refund_tax_id" ref="tax_perception_rg5329_1_5"/>
-        </record>
         
     </data>
 </odoo>
