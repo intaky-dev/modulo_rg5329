@@ -26,14 +26,7 @@
             <field name="active">True</field>
             <field name="sequence">10</field>
             <field name="tax_group_id" ref="tax_group_rg5329"/>
-            <field name="invoice_repartition_line_ids" eval="[
-                (0, 0, {'repartition_type': 'base', 'factor_percent': 100}),
-                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100, 'account_id': ref('account_perception_rg5329')})
-            ]"/>
-            <field name="refund_repartition_line_ids" eval="[
-                (0, 0, {'repartition_type': 'base', 'factor_percent': 100}),
-                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100, 'account_id': ref('account_perception_rg5329')})
-            ]"/>
+            <field name="account_id" ref="account_perception_rg5329"/>
         </record>
         
         <record id="tax_perception_rg5329_1_5" model="account.tax">
@@ -45,14 +38,7 @@
             <field name="active">True</field>
             <field name="sequence">11</field>
             <field name="tax_group_id" ref="tax_group_rg5329"/>
-            <field name="invoice_repartition_line_ids" eval="[
-                (0, 0, {'repartition_type': 'base', 'factor_percent': 100}),
-                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100, 'account_id': ref('account_perception_rg5329')})
-            ]"/>
-            <field name="refund_repartition_line_ids" eval="[
-                (0, 0, {'repartition_type': 'base', 'factor_percent': 100}),
-                (0, 0, {'repartition_type': 'tax', 'factor_percent': 100, 'account_id': ref('account_perception_rg5329')})
-            ]"/>
+            <field name="account_id" ref="account_perception_rg5329"/>
         </record>
         
     </data>
