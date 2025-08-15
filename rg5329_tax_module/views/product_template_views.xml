@@ -8,7 +8,7 @@
             <field name="model">product.template</field>
             <field name="inherit_id" ref="product.product_template_form_view"/>
             <field name="arch" type="xml">
-                <xpath expr="//group[@name='group_general']" position="inside">
+                <xpath expr="//div[@name='taxes_div']" position="after">
                     <field name="apply_rg5329" string="Aplicar RG 5329"/>
                 </xpath>
             </field>
