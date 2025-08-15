@@ -6,10 +6,8 @@
             <field name="model">res.partner</field>
             <field name="inherit_id" ref="base.view_partner_form"/>
             <field name="arch" type="xml">
-                <xpath expr="//page[@name='accounting']" position="inside">
-                    <group string="RG 5329 - Percepción IVA">
-                        <field name="rg5329_exempt"/>
-                    </group>
+                <xpath expr="//group[@name='misc']" position="inside">
+                    <field name="rg5329_exempt" string="Exento RG 5329"/>
                 </xpath>
             </field>
         </record>
