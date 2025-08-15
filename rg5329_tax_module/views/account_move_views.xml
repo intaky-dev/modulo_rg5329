@@ -6,15 +6,10 @@
             <field name="model">account.move</field>
             <field name="inherit_id" ref="account.view_move_form"/>
             <field name="arch" type="xml">
-                <xpath expr="//field[@name='invoice_line_ids']" position="after">
-                    <group string="Percepción RG 5329" name="rg5329_group">
-                        <field name="rg5329_base_amount"
-                               modifiers='{"invisible": [["rg5329_base_amount", "=", 0]]}'
-                               string="Base Imponible RG 5329"/>
-                        <field name="rg5329_perception_amount"
-                               modifiers='{"invisible": [["rg5329_perception_amount", "=", 0]]}'
-                               string="Total Percepción RG 5329"/>
-                    </group>
+                
+                <!-- Personalizar label de impuestos -->
+                <xpath expr="//label[@for='amount_tax']" position="replace">
+                    <label for="amount_tax">Percepción RG 5329:</label>
                 </xpath>
             </field>
         </record>
