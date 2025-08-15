@@ -6,13 +6,15 @@ class AccountMove(models.Model):
     rg5329_perception_amount = fields.Monetary(
         string='Total Percepción RG 5329',
         compute='_compute_rg5329_perception',
-        store=True
+        store=True,
+        invisible=True
     )
     
     rg5329_base_amount = fields.Monetary(
         string='Base RG 5329',
         compute='_compute_rg5329_perception',
-        store=True
+        store=True,
+        invisible=True
     )
     
     @api.depends('invoice_line_ids', 'invoice_line_ids.price_subtotal')
