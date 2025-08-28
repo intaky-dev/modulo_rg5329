@@ -1,0 +1,50 @@
+/** @odoo-module **/
+
+import { registry } from "@web/core/registry";
+import { ListRenderer } from "@web/views/list/list_renderer";
+import { patch } from "@web/core/utils/patch";
+
+console.log("🚀 RG5329 Sale Order Line extension loading...");
+
+// Patch ListRenderer for sale.order.line to trigger RG5329 after line changes
+patch(ListRenderer.prototype, "rg5329_sale_order_line", {
+    async onCellChanged(record, fieldName, value) {
+        const result = await super.onCellChanged(...arguments);
+        
+        // Check if this is a sale order line and if critical fields changed
+        if (record.resModel === 'sale.order.line' && 
+            ['product_id', 'product_uom_qty', 'price_unit'].includes(fieldName)) {
+            
+            console.log(`🔄 RG5329: Line field ${fieldName} changed, triggering logic...`);
+            
+            try {
+                // Get the parent sale order and trigger RG5329 logic
+                const orderId = record.data.order_id && record.data.order_id[0];
+                if (orderId) {
+                    // Debounce to avoid too many calls
+                    clearTimeout(this._rg5329Timeout);
+                    this._rg5329Timeout = setTimeout(async () => {
+                        try {
+                            await this.rpc("/web/dataset/call_kw", {
+                                model: "sale.order",
+                                method: "apply_rg5329_logic_manual",
+                                args: [orderId],
+                                kwargs: {}
+                            });
+                            console.log("✅ RG5329: Logic applied after line change");
+                        } catch (error) {
+                            console.error("❌ RG5329: Error applying logic after line change:", error);
+                        }
+                    }, 1000); // 1 second delay
+                }
+                
+            } catch (error) {
+                console.error("❌ RG5329: Error in line change handler:", error);
+            }
+        }
+        
+        return result;
+    }
+});
+
+console.log("✅ RG5329 Sale Order Line extension loaded");

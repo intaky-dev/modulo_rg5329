@@ -23,7 +23,7 @@ services:
       - USER=odoo
       - PASSWORD=odoo
     command: >
-      odoo -d odoo -i my_module --stop-after-init
+      odoo -d odoo -i my_module --load-demo=all --stop-after-init
 
 volumes:
   odoo-db-data:

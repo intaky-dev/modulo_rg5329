@@ -1,0 +1,41 @@
+/** @odoo-module **/
+
+import { registry } from "@web/core/registry";
+import { FormController } from "@web/views/form/form_controller";
+import { patch } from "@web/core/utils/patch";
+
+console.log("🚀 RG5329 Sale Order Form extension loading...");
+
+// Patch the FormController to handle RG5329 logic for sale orders
+patch(FormController.prototype, "rg5329_sale_order_form", {
+    async _onSave() {
+        const result = await super._onSave(...arguments);
+        
+        // Only apply RG5329 logic for sale.order model
+        if (this.props.resModel === 'sale.order' && this.model.root.resId) {
+            console.log("💾 RG5329: Form saved, checking RG5329 conditions...");
+            
+            try {
+                // Call the RG5329 logic after successful save
+                const orderId = this.model.root.resId;
+                await this.rpc("/web/dataset/call_kw", {
+                    model: "sale.order",
+                    method: "apply_rg5329_logic_manual",
+                    args: [orderId],
+                    kwargs: {}
+                });
+                
+                console.log("✅ RG5329: Logic applied after save");
+                
+            } catch (error) {
+                console.error("❌ RG5329: Error applying logic after save:", error);
+            }
+        }
+        
+        return result;
+    }
+});
+
+console.log("✅ RG5329 Sale Order Form extension loaded");
+
+export default {};
