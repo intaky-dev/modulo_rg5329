@@ -235,16 +235,18 @@ class SaleOrder(models.Model):
         
         # Trigger RG5329 logic after amounts are computed (but avoid infinite loops)
         if (not self.env.context.get('applying_rg5329') and 
-            not self.env.context.get('skip_rg5329_auto') and
-            self.state in ['draft', 'sent']):
-            # Only trigger if there are RG5329 products
-            has_rg5329_products = any(
-                line.product_id and line.product_id.apply_rg5329 
-                for line in self.order_line
-            )
-            if has_rg5329_products:
-                _logger.info("RG5329 UNIFIED: Amounts computed, checking RG5329 logic...")
-                self.with_context(skip_rg5329_auto=True)._apply_rg5329_logic()
+            not self.env.context.get('skip_rg5329_auto')):
+            
+            for order in self:
+                if order.state in ['draft', 'sent']:
+                    # Only trigger if there are RG5329 products
+                    has_rg5329_products = any(
+                        line.product_id and line.product_id.apply_rg5329 
+                        for line in order.order_line
+                    )
+                    if has_rg5329_products:
+                        _logger.info("RG5329 UNIFIED: Amounts computed, checking RG5329 logic...")
+                        order.with_context(skip_rg5329_auto=True)._apply_rg5329_logic()
         
         return result
 
