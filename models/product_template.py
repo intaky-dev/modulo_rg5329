@@ -9,7 +9,7 @@ class ProductTemplate(models.Model):
         default=False,
         help='Marque si este producto está sujeto a la percepción RG 5329'
     )
-    
+
 
 
 class ProductProduct(models.Model):

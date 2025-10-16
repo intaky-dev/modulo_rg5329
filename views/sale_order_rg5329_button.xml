@@ -8,9 +8,9 @@
             <field name="inherit_id" ref="sale.view_order_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//header" position="inside">
-                    <button name="apply_rg5329_manual_button" 
-                            type="object" 
-                            string="Apply RG5329 Tax" 
+                    <button name="apply_rg5329_manual_button"
+                            type="object"
+                            string="Apply RG5329 Tax"
                             class="btn-primary"
                             invisible="state not in ('draft', 'sent')"
                             help="Apply Argentine RG5329 tax perception if conditions are met"/>

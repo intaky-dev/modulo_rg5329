@@ -9,8 +9,12 @@ class AccountTax(models.Model):
         default=False,
         help='Marque si este impuesto es una percepción RG 5329'
     )
-    
-    def compute_all(self, price_unit, currency=None, quantity=1.0, product=None, partner=None, is_refund=False, handle_price_include=True, include_caba_tags=False, fixed_multiplicator=1, **kwargs):
+
+    def compute_all(
+        self, price_unit, currency=None, quantity=1.0, product=None,
+        partner=None, is_refund=False, handle_price_include=True,
+        include_caba_tags=False, fixed_multiplicator=1, **kwargs
+    ):
         """Override para aplicar lógica condicional a impuestos RG 5329"""
         # Filtrar impuestos RG 5329 si el producto no está marcado
         taxes_to_compute = self
@@ -33,4 +37,8 @@ class AccountTax(models.Model):
                 'base': price_unit * quantity,
             }
 
-        return super(AccountTax, taxes_to_compute).compute_all(price_unit, currency, quantity, product, partner, is_refund, handle_price_include, include_caba_tags, fixed_multiplicator, **kwargs)
+        return super(AccountTax, taxes_to_compute).compute_all(
+            price_unit, currency, quantity, product, partner,
+            is_refund, handle_price_include, include_caba_tags,
+            fixed_multiplicator, **kwargs
+        )

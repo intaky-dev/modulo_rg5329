@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
-        
+
         <!-- Cuenta contable para percepciones RG 5329 -->
         <record id="account_perception_rg5329" model="account.account" forcecreate="0">
             <field name="code">2.1.3.03.041</field>
@@ -49,7 +49,7 @@
                 }),
             ]"/>
         </record>
-        
+
         <record id="tax_perception_rg5329_1_5" model="account.tax">
             <field name="name">Percepción IVA RG 5329 - 1,5%</field>
             <field name="type_tax_use">sale</field>
@@ -83,6 +83,6 @@
             ]"/>
         </record>
 
-        
+
     </data>
 </odoo>

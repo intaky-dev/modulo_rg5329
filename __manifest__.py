@@ -5,9 +5,9 @@
     "summary": "Régimen de percepción de IVA RG 5329 - Versión Simplificada - Odoo 18",
     "description": """
         Módulo para aplicar el régimen de percepción de IVA establecido por la RG 5329/2023.
-        
+
         Compatibilidad: Odoo 18.0+
-        
+
         Características:
         - Percepción 3% para productos con IVA 21%
         - Percepción 1,5% para productos con IVA 10,5%
