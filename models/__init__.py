@@ -4,3 +4,4 @@ from . import account_move
 from . import account_tax
 from . import account_setup
 from . import sale_order  # UNIFIED SINGLE SOURCE OF TRUTH
+from . import pos_order
