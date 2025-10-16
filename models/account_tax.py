@@ -16,6 +16,9 @@ class AccountTax(models.Model):
         include_caba_tags=False, fixed_multiplicator=1, **kwargs
     ):
         """Override para aplicar lógica condicional a impuestos RG 5329"""
+        # Extraer rounding_method de kwargs para evitar duplicación
+        rounding_method = kwargs.pop('rounding_method', None)
+
         # Filtrar impuestos RG 5329 si el producto no está marcado
         taxes_to_compute = self
 
@@ -37,8 +40,13 @@ class AccountTax(models.Model):
                 'base': price_unit * quantity,
             }
 
+        # Preparar argumentos para super()
+        super_kwargs = kwargs.copy()
+        if rounding_method is not None:
+            super_kwargs['rounding_method'] = rounding_method
+
         return super(AccountTax, taxes_to_compute).compute_all(
             price_unit, currency, quantity, product, partner,
             is_refund, handle_price_include, include_caba_tags,
-            fixed_multiplicator, **kwargs
+            fixed_multiplicator, **super_kwargs
         )
