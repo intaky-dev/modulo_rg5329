@@ -83,6 +83,73 @@
             ]"/>
         </record>
 
+        <!-- Impuestos de percepción RG 5329 para COMPRAS -->
+        <record id="tax_perception_rg5329_3_purchase" model="account.tax">
+            <field name="name">Percepción IVA RG 5329 - 3% (Compras)</field>
+            <field name="type_tax_use">purchase</field>
+            <field name="amount_type">percent</field>
+            <field name="amount">3.0</field>
+            <field name="description">Percepción 3% para productos con IVA 21% en compras</field>
+            <field name="active">True</field>
+            <field name="sequence">10</field>
+            <field name="tax_group_id" ref="tax_group_rg5329"/>
+            <field name="is_rg5329_perception">True</field>
+            <field name="include_base_amount">False</field>
+            <field name="invoice_repartition_line_ids" eval="[
+                (0,0, {
+                    'repartition_type': 'base',
+                }),
+                (0,0, {
+                    'factor_percent': 100,
+                    'repartition_type': 'tax',
+                    'account_id': ref('account_perception_rg5329'),
+                }),
+            ]"/>
+            <field name="refund_repartition_line_ids" eval="[
+                (0,0, {
+                    'repartition_type': 'base',
+                }),
+                (0,0, {
+                    'factor_percent': 100,
+                    'repartition_type': 'tax',
+                    'account_id': ref('account_perception_rg5329'),
+                }),
+            ]"/>
+        </record>
+
+        <record id="tax_perception_rg5329_1_5_purchase" model="account.tax">
+            <field name="name">Percepción IVA RG 5329 - 1,5% (Compras)</field>
+            <field name="type_tax_use">purchase</field>
+            <field name="amount_type">percent</field>
+            <field name="amount">1.5</field>
+            <field name="description">Percepción 1,5% para productos con IVA 10,5% en compras</field>
+            <field name="active">True</field>
+            <field name="sequence">11</field>
+            <field name="tax_group_id" ref="tax_group_rg5329"/>
+            <field name="is_rg5329_perception">True</field>
+            <field name="include_base_amount">False</field>
+            <field name="invoice_repartition_line_ids" eval="[
+                (0,0, {
+                    'repartition_type': 'base',
+                }),
+                (0,0, {
+                    'factor_percent': 100,
+                    'repartition_type': 'tax',
+                    'account_id': ref('account_perception_rg5329'),
+                }),
+            ]"/>
+            <field name="refund_repartition_line_ids" eval="[
+                (0,0, {
+                    'repartition_type': 'base',
+                }),
+                (0,0, {
+                    'factor_percent': 100,
+                    'repartition_type': 'tax',
+                    'account_id': ref('account_perception_rg5329'),
+                }),
+            ]"/>
+        </record>
+
 
     </data>
 </odoo>

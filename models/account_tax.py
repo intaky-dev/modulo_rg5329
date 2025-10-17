@@ -15,24 +15,22 @@ class AccountTax(models.Model):
         partner=None, is_refund=False, handle_price_include=True,
         include_caba_tags=False, fixed_multiplicator=1, **kwargs
     ):
-        """Override para aplicar lógica condicional a impuestos RG 5329"""
+        """
+        Override para aplicar lógica condicional a impuestos RG 5329
+
+        IMPORTANTE: Este método solo filtra impuestos RG5329 durante el cálculo
+        si son llamados en contexto de evaluación automática, NO cuando ya fueron
+        aplicados manualmente a una línea.
+        """
         # Extraer rounding_method de kwargs para evitar duplicación
         # No lo volvemos a agregar, solo lo removemos de kwargs
         kwargs.pop('rounding_method', None)
 
-        # Filtrar impuestos RG 5329 si el producto no está marcado
+        # Por defecto, calcular todos los impuestos que se pasaron
+        # Solo filtramos RG5329 si viene del contexto de aplicación automática
         taxes_to_compute = self
 
-        # Verificar si hay impuestos RG 5329 que deben ser excluidos
-        if product and hasattr(product, 'apply_rg5329'):
-            if not product.apply_rg5329:
-                # Excluir impuestos RG 5329 si el producto no está marcado
-                taxes_to_compute = self.filtered(lambda t: not t.is_rg5329_perception)
-        else:
-            # Si no hay producto o no tiene el campo, excluir todos los RG 5329
-            taxes_to_compute = self.filtered(lambda t: not t.is_rg5329_perception)
-
-        # Si no quedan impuestos para calcular, retornar valores base
+        # Si NO quedan impuestos para calcular, retornar valores base
         if not taxes_to_compute:
             return {
                 'taxes': [],

@@ -24,6 +24,7 @@
     "depends": [
         "account",
         "sale",
+        "purchase",
         "product",
         "l10n_ar",
         "point_of_sale",
