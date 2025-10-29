@@ -27,7 +27,6 @@
         "purchase",
         "product",
         "l10n_ar",
-        "point_of_sale",
     ],
     "external_dependencies": {
         "python": [],
@@ -45,9 +44,6 @@
     "assets": {
         "web.assets_backend": [
             "modulo_rg5329/static/src/js/rg5329_auto_trigger.js",
-        ],
-        "point_of_sale._assets_pos": [
-            "modulo_rg5329/static/src/js/pos_rg5329.js",
         ],
     },
     # Demo data created programmatically via installation script
