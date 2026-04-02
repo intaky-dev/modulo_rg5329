@@ -19,7 +19,7 @@
             <field name="inherit_id" ref="account.view_tax_group_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='name']" position="after">
-                    <field name="l10n_ar_tribute_afip_code"/>
+                    <field name="l10n_ar_tribute_afip_code" readonly="False"/>
                 </xpath>
             </field>
         </record>
