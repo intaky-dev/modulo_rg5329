@@ -13,5 +13,15 @@
                 </xpath>
             </field>
         </record>
+        <record id="account_tax_group_form_rg5329" model="ir.ui.view">
+            <field name="name">account.tax.group.form.rg5329</field>
+            <field name="model">account.tax.group</field>
+            <field name="inherit_id" ref="account.view_tax_group_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="l10n_ar_tribute_afip_code"/>
+                </xpath>
+            </field>
+        </record>
     </data>
 </odoo>
