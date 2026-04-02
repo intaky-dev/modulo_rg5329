@@ -218,3 +218,17 @@ class AccountMove(models.Model):
                         # Remover el impuesto si no cumple el mínimo
                         if target_tax in line.tax_ids:
                             line.tax_ids = [(3, target_tax.id)]
+
+    def wsfe_get_cae_request(self, client=None):
+        """Override para inyectar CondicionIVAReceptorId requerido por RG 5616."""
+        res = super().wsfe_get_cae_request(client=client)
+        partner = self.commercial_partner_id
+        responsibility = partner.l10n_ar_afip_responsibility_type_id
+        condicion_iva = 5  # Consumidor Final como fallback
+        if responsibility and responsibility.code:
+            try:
+                condicion_iva = int(responsibility.code)
+            except (ValueError, TypeError):
+                pass
+        res['FeDetReq'][0]['FECAEDetRequest']['CondicionIVAReceptorId'] = condicion_iva
+        return res
