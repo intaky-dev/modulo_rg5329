@@ -72,7 +72,7 @@ docker exec "$CONTAINER_NAME" python3 -c "
 import xmlrpc.client
 url = 'http://localhost:8069'
 db = '$DB_NAME'
-username = '$ADMIN_USER'  
+username = '$ADMIN_USER'
 password = '$ADMIN_PASSWORD'
 
 try:
@@ -105,10 +105,10 @@ module_name = '$MODULE_NAME'
 
 try:
     print('🔗 Connecting to Odoo...')
-    
+
     # Connect to common service
     common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(url))
-    
+
     # Authenticate (assumes DB exists)
     print('🔐 Authenticating...')
     uid = common.authenticate(db, username, password, {})
@@ -117,18 +117,18 @@ try:
         print('   Please create database manually first')
         sys.exit(1)
     print(f'✅ Authenticated as user {uid}')
-    
+
     # Connect to object service
     models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(url))
-    
+
     # Update apps list
     print('🔄 Updating apps list...')
     models.execute_kw(db, uid, password, 'ir.module.module', 'update_list', [])
     print('✅ Apps list updated')
-    
+
     # Install required base modules in correct order
     print('📦 Installing base modules in correct order...')
-    
+
     # Order matters! Account first, then sales, then localization
     required_modules = [
         ('base', 'Base Module'),
@@ -136,7 +136,7 @@ try:
         ('sale', 'Sales Management'),  # Changed name to match Odoo 18
         ('l10n_ar', 'Argentina Localization')
     ]
-    
+
     for req_module_name, module_desc in required_modules:
         print(f'🔍 Installing {module_desc} ({req_module_name})...')
         try:
@@ -144,11 +144,11 @@ try:
             if req_module_ids:
                 req_module_info = models.execute_kw(db, uid, password, 'ir.module.module', 'read', [req_module_ids[0]], {'fields': ['state']})
                 current_state = req_module_info[0]['state']
-                
+
                 if current_state == 'uninstalled':
                     print(f'   Installing {module_desc}...')
                     models.execute_kw(db, uid, password, 'ir.module.module', 'button_immediate_install', [req_module_ids[0]])
-                    
+
                     # Wait for installation to complete and verify
                     installation_success = False
                     for i in range(60):  # Wait up to 60 seconds for complex modules
@@ -163,7 +163,7 @@ try:
                             break
                         elif i % 10 == 0:  # Progress update every 10 seconds
                             print(f'   Still installing {module_desc}... ({i+1}s)')
-                    
+
                     if not installation_success:
                         print(f'❌ Failed to install {module_desc}, but continuing...')
                 elif current_state == 'installed':
@@ -175,36 +175,36 @@ try:
         except Exception as e:
             print(f'❌ Error installing {module_desc}: {str(e)}')
             # Continue with next module
-    
+
     # Give system time to stabilize
     print('⏳ Waiting for system stabilization...')
     time.sleep(5)
-    
+
     # Search for our RG 5329 module
     print(f'🔍 Searching for module {module_name}...')
     module_ids = models.execute_kw(db, uid, password, 'ir.module.module', 'search', [[['name', '=', module_name]]])
-    
+
     if not module_ids:
         print(f'❌ Module {module_name} not found')
         print('   Check module syntax and try manual installation')
         sys.exit(1)
-    
+
     module_id = module_ids[0]
     module_info = models.execute_kw(db, uid, password, 'ir.module.module', 'read', [module_id], {'fields': ['name', 'state', 'shortdesc']})
-    
+
     print(f'✅ Found module: {module_info[0][\"shortdesc\"]}')
     print(f'   Current state: {module_info[0][\"state\"]}')
-    
+
     # Install the module if not already installed
     if module_info[0]['state'] == 'uninstalled':
         print('📦 Installing module...')
         models.execute_kw(db, uid, password, 'ir.module.module', 'button_immediate_install', [module_id])
         print('✅ Module installation completed!')
-        
+
     elif module_info[0]['state'] == 'installed':
         print('ℹ️  Module is already installed')
         print('   Skipping installation to avoid conflicts')
-        
+
     else:
         print(f'ℹ️  Module state: {module_info[0][\"state\"]} - trying to install...')
         try:
@@ -212,21 +212,21 @@ try:
             print('✅ Module installation completed!')
         except Exception as e:
             print(f'⚠️  Could not install module: {str(e)}')
-        
+
     # Force create demo data manually since Odoo 18 doesn't handle it automatically
     print('🎯 Creating demo data manually...')
     time.sleep(2)
-    
+
     # Create demo partners
     try:
         # Check if demo data already exists
         existing_partner = models.execute_kw(db, uid, password, 'res.partner', 'search', [[['name', '=', 'EMPRESA DEMO RI - Para Probar RG 5329']]])
-        
+
         if not existing_partner:
             # Find Argentina country
             country_ar = models.execute_kw(db, uid, password, 'res.country', 'search', [[['code', '=', 'AR']]])
             country_id = country_ar[0] if country_ar else False
-            
+
             # Create RI partner
             partner_ri = {
                 'name': 'EMPRESA DEMO RI - Para Probar RG 5329',
@@ -242,7 +242,7 @@ try:
             }
             models.execute_kw(db, uid, password, 'res.partner', 'create', [partner_ri])
             print('✅ Created RI demo partner')
-            
+
             # Create exempt partner
             partner_exento = {
                 'name': 'CLIENTE EXENTO RG 5329 - Para Probar Exención',
@@ -262,16 +262,16 @@ try:
             print('✅ Demo partners already exist')
     except Exception as e:
         print(f'⚠️  Could not create demo partners: {e}')
-    
+
     # Create demo products
     try:
         existing_product = models.execute_kw(db, uid, password, 'product.template', 'search', [[['name', '=', 'PRODUCTO ALTO VALOR RG 5329 (Para probar percepción)']]])
-        
+
         if not existing_product:
             # Find product category (All category)
             category = models.execute_kw(db, uid, password, 'product.category', 'search', [[]], {'limit': 1})
             category_id = category[0] if category else 1  # Default to ID 1 if not found
-            
+
             # Create high value product
             product_alto = {
                 'name': 'PRODUCTO ALTO VALOR RG 5329 (Para probar percepción)',
@@ -284,7 +284,7 @@ try:
             }
             models.execute_kw(db, uid, password, 'product.template', 'create', [product_alto])
             print('✅ Created high value demo product')
-            
+
             # Create normal product
             product_normal = {
                 'name': 'PRODUCTO NORMAL (Sin RG 5329)',
@@ -301,18 +301,18 @@ try:
             print('✅ Demo products already exist')
     except Exception as e:
         print(f'⚠️  Could not create demo products: {e}')
-    
+
     print('✅ Installation process completed')
-    
+
     # Verify demo data was loaded
     print('🔍 Verifying demo data was loaded...')
     time.sleep(2)
-    
+
     try:
         # Check for demo partners
         demo_partners = models.execute_kw(db, uid, password, 'res.partner', 'search_count', [[['name', 'like', 'EMPRESA DEMO RI']]])
         demo_products = models.execute_kw(db, uid, password, 'product.template', 'search_count', [[['name', 'like', 'PRODUCTO ALTO VALOR RG 5329']]])
-        
+
         if demo_partners > 0 and demo_products > 0:
             print(f'✅ Demo data loaded successfully!')
             print(f'   • Demo partners: {demo_partners}')
@@ -324,7 +324,7 @@ try:
             print('   Try manual creation or check module manifest')
     except:
         print('⚠️  Could not verify demo data - check manually')
-    
+
 except Exception as e:
     print(f'❌ Error: {str(e)}')
     print('📋 Try manual installation:')

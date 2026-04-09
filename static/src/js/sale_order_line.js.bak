@@ -10,13 +10,13 @@ console.log("🚀 RG5329 Sale Order Line extension loading...");
 patch(ListRenderer.prototype, "rg5329_sale_order_line", {
     async onCellChanged(record, fieldName, value) {
         const result = await super.onCellChanged(...arguments);
-        
+
         // Check if this is a sale order line and if critical fields changed
-        if (record.resModel === 'sale.order.line' && 
+        if (record.resModel === 'sale.order.line' &&
             ['product_id', 'product_uom_qty', 'price_unit'].includes(fieldName)) {
-            
+
             console.log(`🔄 RG5329: Line field ${fieldName} changed, triggering logic...`);
-            
+
             try {
                 // Get the parent sale order and trigger RG5329 logic
                 const orderId = record.data.order_id && record.data.order_id[0];
@@ -37,12 +37,12 @@ patch(ListRenderer.prototype, "rg5329_sale_order_line", {
                         }
                     }, 1000); // 1 second delay
                 }
-                
+
             } catch (error) {
                 console.error("❌ RG5329: Error in line change handler:", error);
             }
         }
-        
+
         return result;
     }
 });

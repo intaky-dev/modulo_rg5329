@@ -11,27 +11,27 @@ console.log("🚀 RG5329 Auto Trigger loading...");
 const rg5329AutoTrigger = {
     start() {
         console.log("🔧 RG5329 Auto Trigger started");
-        
+
         // Wait for DOM to be ready
         document.addEventListener('DOMContentLoaded', () => {
             this.initializeWatchers();
         });
-        
+
         // If DOM already ready
         if (document.readyState !== 'loading') {
             this.initializeWatchers();
         }
-        
+
         return {};
     },
 
     initializeWatchers() {
         console.log("👀 RG5329: Setting up watchers...");
-        
+
         // Watch for form changes with debouncing
         let debounceTimer;
         const debounceDelay = 1500; // 1.5 seconds
-        
+
         const triggerCheck = () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
@@ -66,8 +66,8 @@ const rg5329AutoTrigger = {
     isRelevantChange(event) {
         const field = event.target;
         if (!field.name) return false;
-        
-        return field.name.includes('partner_id') || 
+
+        return field.name.includes('partner_id') ||
                field.name.includes('product_id') ||
                field.name.includes('product_uom_qty') ||
                field.name.includes('price_unit');
@@ -80,17 +80,17 @@ const rg5329AutoTrigger = {
 
     isOnSaleOrderForm() {
         const url = window.location.href;
-        return url.includes('/web#') && 
+        return url.includes('/web#') &&
                (url.includes('model=sale.order') || url.includes('sale/order'));
     },
 
     async checkAndApplyRG5329() {
         try {
             console.log("🔍 RG5329: Checking conditions...");
-            
+
             // Extract current form data
             const orderData = this.extractOrderData();
-            
+
             if (!orderData.isValid) {
                 console.log("⚠️ RG5329: Order data not ready");
                 return;
@@ -121,15 +121,15 @@ const rg5329AutoTrigger = {
 
     extractOrderData() {
         // Get customer info
-        const customerField = document.querySelector('[name="partner_id"] input') || 
+        const customerField = document.querySelector('[name="partner_id"] input') ||
                             document.querySelector('span[name="partner_id"]');
-        
+
         const customerText = customerField ? (customerField.value || customerField.textContent || '') : '';
 
         // Get amount info
         const amountField = document.querySelector('span[name="amount_untaxed"]') ||
                           document.querySelector('[name="amount_untaxed"]');
-        
+
         const amountText = amountField ? (amountField.textContent || amountField.value || '0') : '0';
         const amount = parseFloat(amountText.replace(/[^0-9.-]/g, '')) || 0;
 
@@ -147,7 +147,7 @@ const rg5329AutoTrigger = {
     hasRG5329Products() {
         // Look for products with "RG 5329" in the name
         const productElements = document.querySelectorAll('[name="product_id"]');
-        
+
         for (let element of productElements) {
             const text = element.textContent || element.value || '';
             if (text.includes('RG 5329') || text.includes('ALTO VALOR')) {
@@ -161,7 +161,7 @@ const rg5329AutoTrigger = {
         // Check all conditions
         const isEligibleCustomer = orderData.customerText.includes('EMPRESA DEMO RI') ||
                                  orderData.customerText.includes('Para Probar RG 5329');
-        
+
         const isAboveThreshold = orderData.amount >= 100000;
         const hasProducts = orderData.hasRG5329Products;
 
@@ -177,27 +177,27 @@ const rg5329AutoTrigger = {
         // Check current tax amount to see if RG5329 is applied
         const taxField = document.querySelector('span[name="amount_tax"]') ||
                         document.querySelector('[name="amount_tax"]');
-        
+
         if (taxField) {
             const taxText = taxField.textContent || taxField.value || '0';
             const taxAmount = parseFloat(taxText.replace(/[^0-9.-]/g, '')) || 0;
-            
+
             // If tax is around 21600 (18000 IVA + 3600 RG5329), both taxes are applied
             const hasRG5329 = Math.abs(taxAmount - 21600) < 100;
             console.log(`💰 Current tax amount: $${taxAmount}, Has RG5329: ${hasRG5329}`);
             return hasRG5329;
         }
-        
+
         return false;
     },
 
     async applyRG5329() {
         console.log("🔧 RG5329: Executing application...");
-        
+
         try {
             // Get order ID from URL
             const orderId = this.getOrderIdFromUrl();
-            
+
             if (!orderId) {
                 console.log("⚠️ RG5329: Could not get order ID, using fallback method");
                 await this.applyRG5329Fallback();
@@ -226,18 +226,18 @@ const rg5329AutoTrigger = {
             });
 
             const result = await response.json();
-            
+
             if (result.result && result.result.success) {
                 console.log("✅ RG5329: Successfully applied via backend");
-                
+
                 // Auto-save the form
                 setTimeout(() => {
                     this.saveForm();
                 }, 1000);
-                
+
                 // Show success message
                 this.showSuccessMessage();
-                
+
             } else {
                 console.log("⚠️ RG5329: Backend call failed, using fallback");
                 await this.applyRG5329Fallback();
@@ -251,10 +251,10 @@ const rg5329AutoTrigger = {
 
     async applyRG5329Fallback() {
         console.log("🔄 RG5329: Using fallback method - notification to user");
-        
+
         // Show user-friendly notification
         this.showRG5329Notification();
-        
+
         // Auto-save form to trigger backend recalculation
         setTimeout(() => {
             this.saveForm();
@@ -271,7 +271,7 @@ const rg5329AutoTrigger = {
         // Try to find and click the save button
         const saveButton = document.querySelector('.o_form_button_save:not([disabled])') ||
                           document.querySelector('button[name="action_save"]:not([disabled])');
-        
+
         if (saveButton) {
             console.log("💾 RG5329: Auto-saving form...");
             saveButton.click();
@@ -282,7 +282,7 @@ const rg5329AutoTrigger = {
 
     showSuccessMessage() {
         console.log("🎉 RG5329: Tax applied successfully!");
-        
+
         // Try to show Odoo notification if available
         if (window.odoo && window.odoo.services && window.odoo.services.notification) {
             window.odoo.services.notification.add("RG5329 tax applied successfully!", {
@@ -293,12 +293,12 @@ const rg5329AutoTrigger = {
 
     showRG5329Notification() {
         console.log("📢 RG5329: Showing user notification");
-        
+
         // Create a visual notification
         const notification = document.createElement('div');
         notification.innerHTML = `
-            <div style="position: fixed; top: 20px; right: 20px; z-index: 9999; 
-                        background: #00a09d; color: white; padding: 15px 20px; 
+            <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;
+                        background: #00a09d; color: white; padding: 15px 20px;
                         border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
                         font-family: Arial, sans-serif; max-width: 300px;">
                 <strong>🏷️ RG5329 Tax</strong><br>
@@ -306,9 +306,9 @@ const rg5329AutoTrigger = {
                 <small>Saving form to update totals...</small>
             </div>
         `;
-        
+
         document.body.appendChild(notification);
-        
+
         // Remove notification after 5 seconds
         setTimeout(() => {
             notification.remove();

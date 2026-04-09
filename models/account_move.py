@@ -51,9 +51,9 @@ class AccountMove(models.Model):
 
             move.rg5329_base_amount = base_amount
 
-            # NORMATIVA: Mínimo sobre TOTAL de factura ($100,000 desde actualización)
+            # NORMATIVA: Mínimo sobre TOTAL de factura ($10.000.000 según RG 5329)
             total_invoice = move.amount_untaxed or 0
-            if total_invoice >= 100000 and base_amount > 0:
+            if total_invoice >= 10000000 and base_amount > 0:
                 for line in move.invoice_line_ids:
                     if line.product_id and line.product_id.apply_rg5329:
                         # Determinar alícuota según IVA del producto
@@ -209,8 +209,8 @@ class AccountMove(models.Model):
                                line.product_id.name, iva_rate)
 
                 if target_tax:
-                    # NORMATIVA: Solo aplicar si factura total >= $100,000
-                    if total_invoice >= 100000:
+                    # NORMATIVA: Solo aplicar si factura total >= $10.000.000 (RG 5329)
+                    if total_invoice >= 10000000:
                         # Agregar el impuesto si no está ya presente
                         if target_tax not in line.tax_ids:
                             line.tax_ids = [(4, target_tax.id)]

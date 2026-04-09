@@ -10,11 +10,11 @@ console.log("🚀 RG5329 Sale Order Form extension loading...");
 patch(FormController.prototype, "rg5329_sale_order_form", {
     async _onSave() {
         const result = await super._onSave(...arguments);
-        
+
         // Only apply RG5329 logic for sale.order model
         if (this.props.resModel === 'sale.order' && this.model.root.resId) {
             console.log("💾 RG5329: Form saved, checking RG5329 conditions...");
-            
+
             try {
                 // Call the RG5329 logic after successful save
                 const orderId = this.model.root.resId;
@@ -24,14 +24,14 @@ patch(FormController.prototype, "rg5329_sale_order_form", {
                     args: [orderId],
                     kwargs: {}
                 });
-                
+
                 console.log("✅ RG5329: Logic applied after save");
-                
+
             } catch (error) {
                 console.error("❌ RG5329: Error applying logic after save:", error);
             }
         }
-        
+
         return result;
     }
 });

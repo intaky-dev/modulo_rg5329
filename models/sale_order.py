@@ -144,30 +144,30 @@ class SaleOrder(models.Model):
 
             has_tax = rg5329_tax.id in line.tax_id.ids
 
-            if total >= 100000:
+            if total >= 10000000:
                 # ADD tax if not present
                 if not has_tax:
                     current_tax_ids = list(line.tax_id.ids)  # Convert to list to avoid issues
                     if rg5329_tax.id not in current_tax_ids:  # Double check
                         current_tax_ids.append(rg5329_tax.id)
                         line.with_context(skip_onchange=True).write({'tax_id': [(6, 0, current_tax_ids)]})
-                        _logger.info("RG5329 UNIFIED: ✅ ADDED tax - total $%s >= $100k", total)
+                        _logger.info("RG5329 UNIFIED: ✅ ADDED tax - total $%s >= $10M", total)
 
                         # Force UI refresh
                         self._force_ui_refresh()
                 else:
-                    _logger.info("RG5329 UNIFIED: ✅ Tax already present - total $%s >= $100k", total)
+                    _logger.info("RG5329 UNIFIED: ✅ Tax already present - total $%s >= $10M", total)
             else:
                 # REMOVE tax if present
                 if has_tax:
                     current_tax_ids = [t_id for t_id in line.tax_id.ids if t_id != rg5329_tax.id]
                     line.with_context(skip_onchange=True).write({'tax_id': [(6, 0, current_tax_ids)]})
-                    _logger.info("RG5329 UNIFIED: ❌ REMOVED tax - total $%s < $100k", total)
+                    _logger.info("RG5329 UNIFIED: ❌ REMOVED tax - total $%s < $10M", total)
 
                     # Force UI refresh
                     self._force_ui_refresh()
                 else:
-                    _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $100k", total)
+                    _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $10M", total)
 
         _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
         return True
