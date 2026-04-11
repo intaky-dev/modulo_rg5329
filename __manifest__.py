@@ -21,6 +21,7 @@
     "author": "Tu Empresa",
     "website": "https://www.tuempresa.com",
     "license": "LGPL-3",
+    "development_status": "Beta",
     "depends": [
         "account",
         "sale",
