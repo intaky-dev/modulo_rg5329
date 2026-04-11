@@ -208,29 +208,13 @@ class PurchaseOrder(models.Model):
 
             _logger.info("RG5329 DEBUG: Line has RG5329 product, checking supplier conditions...")
 
-            # Skip if supplier is exempt
-            if self.partner_id and self.partner_id.rg5329_exempt:
-                _logger.info("RG5329 DEBUG: Supplier is exempt")
-                # Remove tax if supplier is exempt
-                if rg5329_tax.id in line.taxes_id.ids:
-                    new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
-                    line.write({'taxes_id': [(6, 0, new_taxes.ids)]})
-                    _logger.info("RG5329 UNIFIED: Removed tax - supplier exempt")
-                continue
-
-            _logger.info("RG5329 DEBUG: Supplier not exempt, checking eligibility...")
-
-            # Check if supplier is eligible (only Responsable Inscripto)
-            if not self._is_partner_eligible_for_rg5329():
-                _logger.info("RG5329 DEBUG: Supplier not eligible for RG5329")
-                # Remove tax if supplier not eligible
+            # Skip if supplier is not eligible (exempt or not Responsable Inscripto)
+            if not (self.partner_id and self.partner_id._is_rg5329_eligible()):
                 if rg5329_tax.id in line.taxes_id.ids:
                     new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
                     line.write({'taxes_id': [(6, 0, new_taxes.ids)]})
                     _logger.info("RG5329 UNIFIED: Removed tax - supplier not eligible")
                 continue
-
-            _logger.info("RG5329 DEBUG: Supplier eligible! Proceeding with tax logic...")
 
             has_tax = rg5329_tax.id in line.taxes_id.ids
 
@@ -261,34 +245,6 @@ class PurchaseOrder(models.Model):
 
         _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
         return True
-
-    def _is_partner_eligible_for_rg5329(self):
-        """
-        Check if supplier is eligible for RG 5329
-        Only applies to IVA Responsable Inscripto (code '1')
-        """
-        try:
-            partner = self.partner_id
-
-            if not hasattr(partner, 'l10n_ar_afip_responsibility_type_id'):
-                _logger.warning("RG5329 UNIFIED: No AFIP responsibility field found")
-                return False
-
-            if not partner.l10n_ar_afip_responsibility_type_id:
-                _logger.info("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
-                return False
-
-            responsibility_code = partner.l10n_ar_afip_responsibility_type_id.code
-            is_eligible = responsibility_code == '1'  # IVA Responsable Inscripto
-
-            _logger.info("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
-                        partner.name, responsibility_code, is_eligible)
-
-            return is_eligible
-
-        except Exception as e:
-            _logger.error("RG5329 UNIFIED: Error checking eligibility: %s", str(e))
-            return False
 
     def _force_ui_refresh(self):
         """Force UI refresh after tax changes"""
@@ -377,7 +333,8 @@ class PurchaseOrderLine(models.Model):
             self.product_id.apply_rg5329 and
             self.order_id and
             order_total_without_rg5329 >= 100000 and
-            not (self.order_id.partner_id and self.order_id.partner_id.rg5329_exempt)
+            self.order_id.partner_id and
+            self.order_id.partner_id._is_rg5329_eligible()
         )
 
         if should_have_rg5329 and rg5329_tax.id not in self.taxes_id.ids:

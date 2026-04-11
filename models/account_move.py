@@ -27,13 +27,7 @@ class AccountMove(models.Model):
     )
     def _compute_rg5329_perception(self):
         for move in self:
-            if move.move_type not in ['out_invoice', 'out_refund'] or move.partner_id.rg5329_exempt:
-                move.rg5329_perception_amount = 0
-                move.rg5329_base_amount = 0
-                continue
-
-            # Verificar categoría fiscal del cliente (solo Responsables Inscriptos)
-            if not move._is_customer_eligible_for_rg5329():
+            if move.move_type not in ['out_invoice', 'out_refund'] or not move.partner_id._is_rg5329_eligible():
                 move.rg5329_perception_amount = 0
                 move.rg5329_base_amount = 0
                 continue
@@ -75,67 +69,6 @@ class AccountMove(models.Model):
 
             move.rg5329_perception_amount = perception_amount
 
-    def _is_customer_eligible_for_rg5329(self):
-        """
-        Verifica si el cliente es elegible para RG 5329 según normativa AFIP
-        Solo aplica a Responsables Inscriptos en IVA
-        Robusto para entornos de producción y testing
-        """
-        try:
-            partner = self.partner_id
-
-            # Verificar si existe el campo de responsabilidad fiscal (compatibilidad)
-            if not hasattr(partner, 'l10n_ar_afip_responsibility_type_id'):
-                _logger.warning(
-                    "Campo l10n_ar_afip_responsibility_type_id no encontrado "
-                    "en partner %s. Asumiendo NO elegible para RG 5329 "
-                    "(BD sin localización argentina completa).",
-                    partner.name
-                )
-                # FIXED: Si no hay localización argentina, asumir NO elegible por defecto
-                return False
-
-            # Verificar si tiene responsabilidad fiscal configurada
-            if not partner.l10n_ar_afip_responsibility_type_id:
-                _logger.info(
-                    "Partner %s sin responsabilidad fiscal configurada, "
-                    "asumiendo NO elegible para RG 5329",
-                    partner.name
-                )
-                # FIXED: Si no está configurado, asumir NO elegible por defecto
-                return False
-
-            # Solo aplicar a Responsables Inscriptos (código IVA_RI)
-            responsibility_code = partner.l10n_ar_afip_responsibility_type_id.code
-
-            # Códigos válidos para RG 5329 según normativa ARCA
-            valid_codes = ['1']  # Solo código 1: IVA Responsable Inscripto
-
-            is_eligible = responsibility_code in valid_codes
-
-            if not is_eligible:
-                _logger.debug("Partner %s con código %s no elegible para RG 5329",
-                            partner.name, responsibility_code)
-
-            return is_eligible
-
-        except AttributeError as e:
-            _logger.warning(
-                "Error accediendo a campos AFIP en partner %s: %s. "
-                "Asumiendo NO elegible para RG 5329.",
-                self.partner_id.name if self.partner_id else 'Unknown',
-                str(e)
-            )
-            return False  # FIXED: Asumir NO elegible en caso de error
-        except Exception as e:
-            _logger.error(
-                "Error inesperado verificando elegibilidad RG 5329 "
-                "para partner %s: %s. Asumiendo NO elegible.",
-                self.partner_id.name if self.partner_id else 'Unknown',
-                str(e)
-            )
-            return False  # FIXED: Asumir NO elegible en caso de error
-
     def _get_line_iva_rate(self, line):
         """Obtiene la alícuota de IVA de una línea"""
         for tax in line.tax_ids:
@@ -145,19 +78,8 @@ class AccountMove(models.Model):
 
     def _auto_apply_rg5329_taxes(self):
         """Aplica automáticamente los impuestos RG 5329 según normativa AFIP"""
-        # Verificar si el cliente está exento
-        if self.partner_id.rg5329_exempt:
-            # Remover cualquier impuesto RG 5329 existente para clientes exentos
-            for line in self.invoice_line_ids:
-                rg5329_taxes = line.tax_ids.filtered('is_rg5329_perception')
-                if rg5329_taxes:
-                    for tax in rg5329_taxes:
-                        line.tax_ids = [(3, tax.id)]
-            return
-
-        # Verificar categoría fiscal del cliente
-        if not self._is_customer_eligible_for_rg5329():
-            # Remover impuestos RG 5329 si no es elegible
+        # Remover impuestos si el partner no es elegible (exento o no Responsable Inscripto)
+        if not self.partner_id._is_rg5329_eligible():
             for line in self.invoice_line_ids:
                 rg5329_taxes = line.tax_ids.filtered('is_rg5329_perception')
                 if rg5329_taxes:
