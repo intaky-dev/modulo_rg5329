@@ -1,5 +1,9 @@
+import time
+
 from odoo import models, fields, api
 import logging
+
+from ..utils import telemetry as otel
 
 _logger = logging.getLogger(__name__)
 
@@ -150,145 +154,179 @@ class PurchaseOrder(models.Model):
         2. Product has apply_rg5329 = True
         3. Order total >= $10,000,000 (TOTAL CON IVA, no subtotal)
         """
-        if self.state not in ['draft', 'sent'] or self.env.context.get('applying_rg5329'):
-            return True
+        _t0 = time.monotonic()
+        with otel.start_span("rg5329.purchase.apply_logic") as span:
+            span.set_attribute("order.name", self.name or "New")
+            span.set_attribute("order.state", self.state or "")
+            try:
+                if self.state not in ['draft', 'sent'] or self.env.context.get('applying_rg5329'):
+                    return True
 
-        # Force recalculation of totals first
-        self.with_context(applying_rg5329=True)._amount_all()
+                # Force recalculation of totals first
+                self.with_context(applying_rg5329=True)._amount_all()
 
-        # IMPORTANTE: Calculamos el total SIN el impuesto RG5329 para evitar recursión
-        # El mínimo de $10M se refiere al total con IVA pero SIN la percepción RG5329
-        rg5329_tax_amount = 0
-        for line in self.order_line:
-            for tax in line.taxes_id:
-                if tax.is_rg5329_perception:
-                    # Calcular cuánto es el impuesto RG5329 en esta línea
-                    tax_result = tax.compute_all(
-                        line.price_unit,
-                        self.currency_id,
-                        line.product_qty,
-                        line.product_id,
-                        self.partner_id
-                    )
-                    rg5329_tax_amount += tax_result['total_included'] - tax_result['total_excluded']
+                # IMPORTANTE: Calculamos el total SIN el impuesto RG5329 para evitar recursión
+                # El mínimo de $10M se refiere al total con IVA pero SIN la percepción RG5329
+                rg5329_tax_amount = 0
+                for line in self.order_line:
+                    for tax in line.taxes_id:
+                        if tax.is_rg5329_perception:
+                            # Calcular cuánto es el impuesto RG5329 en esta línea
+                            tax_result = tax.compute_all(
+                                line.price_unit,
+                                self.currency_id,
+                                line.product_qty,
+                                line.product_id,
+                                self.partner_id
+                            )
+                            rg5329_tax_amount += tax_result['total_included'] - tax_result['total_excluded']
 
-        # Total con IVA pero SIN percepción RG5329
-        total = (self.amount_total or 0) - rg5329_tax_amount
-        _logger.info("=== RG5329 UNIFIED: Processing purchase order %s with total $%s (with VAT, without RG5329) ===",
-                    self.name or 'New', total)
+                # Total con IVA pero SIN percepción RG5329
+                total = (self.amount_total or 0) - rg5329_tax_amount
+                span.set_attribute("order.total_without_rg5329", float(total))
+                span.set_attribute("order.line_count", len(self.order_line))
+                _logger.info("=== RG5329 UNIFIED: Processing purchase order %s with total $%s (with VAT, without RG5329) ===",
+                            self.name or 'New', total)
 
-        # Find RG5329 tax for purchases
-        rg5329_tax = self.env['account.tax'].sudo().search([
-            ('is_rg5329_perception', '=', True),
-            ('amount', '=', 3.0),
-            ('type_tax_use', '=', 'purchase')
-        ], limit=1)
+                # Find RG5329 tax for purchases
+                rg5329_tax = self.env['account.tax'].sudo().search([
+                    ('is_rg5329_perception', '=', True),
+                    ('amount', '=', 3.0),
+                    ('type_tax_use', '=', 'purchase')
+                ], limit=1)
 
-        if not rg5329_tax:
-            _logger.warning("RG5329 UNIFIED: No RG5329 purchase tax found!")
-            return False
+                if not rg5329_tax:
+                    _logger.warning("RG5329 UNIFIED: No RG5329 purchase tax found!")
+                    otel.record_perception_skipped(order_type="purchase", reason="no_tax_found")
+                    return False
 
-        _logger.info("RG5329 UNIFIED: Found RG5329 tax: %s (ID: %s)", rg5329_tax.name, rg5329_tax.id)
+                _logger.info("RG5329 UNIFIED: Found RG5329 tax: %s (ID: %s)", rg5329_tax.name, rg5329_tax.id)
 
-        # Debug order line info
-        _logger.info("RG5329 DEBUG: Purchase order has %d lines", len(self.order_line))
-        _logger.info("RG5329 DEBUG: Purchase order line IDs: %s", [line.id for line in self.order_line])
+                # Debug order line info
+                _logger.info("RG5329 DEBUG: Purchase order has %d lines", len(self.order_line))
+                _logger.info("RG5329 DEBUG: Purchase order line IDs: %s", [line.id for line in self.order_line])
 
-        # Process all lines at once
-        line_count = 0
-        for line in self.order_line:
-            line_count += 1
-            _logger.info("RG5329 DEBUG: Processing line with product: %s",
-                        line.product_id.name if line.product_id else 'No product')
+                # Process all lines at once
+                line_count = 0
+                for line in self.order_line:
+                    line_count += 1
+                    _logger.info("RG5329 DEBUG: Processing line with product: %s",
+                                line.product_id.name if line.product_id else 'No product')
 
-            # Only process products marked for RG5329
-            if not (line.product_id and line.product_id.apply_rg5329):
-                _logger.info("RG5329 DEBUG: Skipping line - product not marked for RG5329")
-                continue
+                    # Only process products marked for RG5329
+                    if not (line.product_id and line.product_id.apply_rg5329):
+                        _logger.info("RG5329 DEBUG: Skipping line - product not marked for RG5329")
+                        continue
 
-            _logger.info("RG5329 DEBUG: Line has RG5329 product, checking supplier conditions...")
+                    _logger.info("RG5329 DEBUG: Line has RG5329 product, checking supplier conditions...")
 
-            # Skip if supplier is exempt
-            if self.partner_id and self.partner_id.rg5329_exempt:
-                _logger.info("RG5329 DEBUG: Supplier is exempt")
-                # Remove tax if supplier is exempt
-                if rg5329_tax.id in line.taxes_id.ids:
-                    new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
-                    line.write({'taxes_id': [(6, 0, new_taxes.ids)]})
-                    _logger.info("RG5329 UNIFIED: Removed tax - supplier exempt")
-                continue
+                    # Skip if supplier is exempt
+                    if self.partner_id and self.partner_id.rg5329_exempt:
+                        _logger.info("RG5329 DEBUG: Supplier is exempt")
+                        # Remove tax if supplier is exempt
+                        if rg5329_tax.id in line.taxes_id.ids:
+                            new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
+                            line.write({'taxes_id': [(6, 0, new_taxes.ids)]})
+                            _logger.info("RG5329 UNIFIED: Removed tax - supplier exempt")
+                        otel.record_perception_skipped(order_type="purchase", reason="customer_exempt")
+                        continue
 
-            _logger.info("RG5329 DEBUG: Supplier not exempt, checking eligibility...")
+                    _logger.info("RG5329 DEBUG: Supplier not exempt, checking eligibility...")
 
-            # Check if supplier is eligible (only Responsable Inscripto)
-            if not self._is_partner_eligible_for_rg5329():
-                _logger.info("RG5329 DEBUG: Supplier not eligible for RG5329")
-                # Remove tax if supplier not eligible
-                if rg5329_tax.id in line.taxes_id.ids:
-                    new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
-                    line.write({'taxes_id': [(6, 0, new_taxes.ids)]})
-                    _logger.info("RG5329 UNIFIED: Removed tax - supplier not eligible")
-                continue
+                    # Check if supplier is eligible (only Responsable Inscripto)
+                    if not self._is_partner_eligible_for_rg5329():
+                        _logger.info("RG5329 DEBUG: Supplier not eligible for RG5329")
+                        # Remove tax if supplier not eligible
+                        if rg5329_tax.id in line.taxes_id.ids:
+                            new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
+                            line.write({'taxes_id': [(6, 0, new_taxes.ids)]})
+                            _logger.info("RG5329 UNIFIED: Removed tax - supplier not eligible")
+                        otel.record_perception_skipped(order_type="purchase", reason="not_eligible")
+                        continue
 
-            _logger.info("RG5329 DEBUG: Supplier eligible! Proceeding with tax logic...")
+                    _logger.info("RG5329 DEBUG: Supplier eligible! Proceeding with tax logic...")
 
-            has_tax = rg5329_tax.id in line.taxes_id.ids
+                    has_tax = rg5329_tax.id in line.taxes_id.ids
 
-            if total >= 10000000:
-                # ADD tax if not present
-                if not has_tax:
-                    current_tax_ids = list(line.taxes_id.ids)  # Convert to list to avoid issues
-                    if rg5329_tax.id not in current_tax_ids:  # Double check
-                        current_tax_ids.append(rg5329_tax.id)
-                        line.with_context(skip_onchange=True).write({'taxes_id': [(6, 0, current_tax_ids)]})
-                        _logger.info("RG5329 UNIFIED: ✅ ADDED tax - total $%s >= $10M", total)
+                    if total >= 10000000:
+                        # ADD tax if not present
+                        if not has_tax:
+                            current_tax_ids = list(line.taxes_id.ids)  # Convert to list to avoid issues
+                            if rg5329_tax.id not in current_tax_ids:  # Double check
+                                current_tax_ids.append(rg5329_tax.id)
+                                line.with_context(skip_onchange=True).write({'taxes_id': [(6, 0, current_tax_ids)]})
+                                _logger.info("RG5329 UNIFIED: ✅ ADDED tax - total $%s >= $10M", total)
+                                otel.record_perception_applied(
+                                    order_type="purchase",
+                                    rate=3.0,
+                                    base_amount=float(line.price_subtotal),
+                                )
+                                # Force UI refresh
+                                self._force_ui_refresh()
+                        else:
+                            _logger.info("RG5329 UNIFIED: ✅ Tax already present - total $%s >= $10M", total)
+                    else:
+                        # REMOVE tax if present
+                        if has_tax:
+                            current_tax_ids = [t_id for t_id in line.taxes_id.ids if t_id != rg5329_tax.id]
+                            line.with_context(skip_onchange=True).write({'taxes_id': [(6, 0, current_tax_ids)]})
+                            _logger.info("RG5329 UNIFIED: ❌ REMOVED tax - total $%s < $10M", total)
+                            otel.record_perception_skipped(order_type="purchase", reason="below_threshold")
+                            # Force UI refresh
+                            self._force_ui_refresh()
+                        else:
+                            _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $10M", total)
 
-                        # Force UI refresh
-                        self._force_ui_refresh()
-                else:
-                    _logger.info("RG5329 UNIFIED: ✅ Tax already present - total $%s >= $10M", total)
-            else:
-                # REMOVE tax if present
-                if has_tax:
-                    current_tax_ids = [t_id for t_id in line.taxes_id.ids if t_id != rg5329_tax.id]
-                    line.with_context(skip_onchange=True).write({'taxes_id': [(6, 0, current_tax_ids)]})
-                    _logger.info("RG5329 UNIFIED: ❌ REMOVED tax - total $%s < $10M", total)
-
-                    # Force UI refresh
-                    self._force_ui_refresh()
-                else:
-                    _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $10M", total)
-
-        _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
-        return True
+                _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
+                return True
+            except Exception as e:
+                span.record_exception(e)
+                otel.record_error("PurchaseOrder._apply_rg5329_logic")
+                raise
+            finally:
+                otel.record_processing_duration(
+                    (time.monotonic() - _t0) * 1000,
+                    order_type="purchase",
+                )
 
     def _is_partner_eligible_for_rg5329(self):
         """
         Check if supplier is eligible for RG 5329
         Only applies to IVA Responsable Inscripto (code '1')
         """
-        try:
-            partner = self.partner_id
+        with otel.start_span("rg5329.purchase.eligibility_check") as span:
+            span.set_attribute("partner.id", self.partner_id.id if self.partner_id else 0)
+            span.set_attribute("partner.name", self.partner_id.name or "")
+            try:
+                partner = self.partner_id
 
-            if not hasattr(partner, 'l10n_ar_afip_responsibility_type_id'):
-                _logger.warning("RG5329 UNIFIED: No AFIP responsibility field found")
+                if not hasattr(partner, 'l10n_ar_afip_responsibility_type_id'):
+                    _logger.warning("RG5329 UNIFIED: No AFIP responsibility field found")
+                    span.set_attribute("eligible", False)
+                    span.set_attribute("skip_reason", "no_afip_field")
+                    return False
+
+                if not partner.l10n_ar_afip_responsibility_type_id:
+                    _logger.info("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
+                    span.set_attribute("eligible", False)
+                    span.set_attribute("skip_reason", "no_responsibility_configured")
+                    return False
+
+                responsibility_code = partner.l10n_ar_afip_responsibility_type_id.code
+                is_eligible = responsibility_code == '1'  # IVA Responsable Inscripto
+
+                span.set_attribute("partner.afip_code", responsibility_code or "")
+                span.set_attribute("eligible", is_eligible)
+                _logger.info("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
+                            partner.name, responsibility_code, is_eligible)
+
+                return is_eligible
+
+            except Exception as e:
+                span.record_exception(e)
+                otel.record_error("PurchaseOrder._is_partner_eligible_for_rg5329")
+                _logger.error("RG5329 UNIFIED: Error checking eligibility: %s", str(e))
                 return False
-
-            if not partner.l10n_ar_afip_responsibility_type_id:
-                _logger.info("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
-                return False
-
-            responsibility_code = partner.l10n_ar_afip_responsibility_type_id.code
-            is_eligible = responsibility_code == '1'  # IVA Responsable Inscripto
-
-            _logger.info("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
-                        partner.name, responsibility_code, is_eligible)
-
-            return is_eligible
-
-        except Exception as e:
-            _logger.error("RG5329 UNIFIED: Error checking eligibility: %s", str(e))
-            return False
 
     def _force_ui_refresh(self):
         """Force UI refresh after tax changes"""
