@@ -69,7 +69,8 @@
       "Bash(kubectl --context admin@neelix get configmap -n netbird -o yaml)",
       "Bash(kubectl --context admin@neelix get secret -n netbird -o yaml)",
       "Bash(kubectl --context admin@neelix get deployment netbird-management -n netbird -o yaml)",
-      "Bash(kubectl --context admin@neelix get secret -n netbird netbird-gateway-setup-key -o jsonpath='{.data}')"
+      "Bash(kubectl --context admin@neelix get secret -n netbird netbird-gateway-setup-key -o jsonpath='{.data}')",
+      "WebFetch(domain:skerritt.blog)"
     ],
     "deny": [],
     "ask": [],

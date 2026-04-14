@@ -51,6 +51,184 @@ class Results:
         print(f"           → {reason}")
 
 
+def _test_purchase_threshold(client: OdooClient, r: Results) -> None:
+    """Crea una PO de prueba y verifica el umbral $10M en compras."""
+    partner_ids = client.execute(
+        "res.partner", "search",
+        [[["l10n_ar_afip_responsibility_type_id.code", "=", "1"],
+          ["rg5329_exempt", "=", False]]],
+        limit=1
+    )
+    if not partner_ids:
+        r.fail("umbral PO - partner", "No hay partners RI no exentos para probar")
+        return
+
+    product_ids = client.execute(
+        "product.product", "search",
+        [[["apply_rg5329", "=", True]]],
+        limit=1
+    )
+    if not product_ids:
+        r.fail("umbral PO - product", "No hay productos con apply_rg5329=True para probar")
+        return
+
+    tax_ids = client.execute(
+        "account.tax", "search",
+        [[["is_rg5329_perception", "=", True],
+          ["amount", "=", 3.0],
+          ["type_tax_use", "=", "purchase"]]],
+        limit=1
+    )
+    if not tax_ids:
+        r.fail("umbral PO - tax", "No se encontró impuesto RG5329 de compras (3%)")
+        return
+
+    rg5329_tax_id = tax_ids[0]
+    po_id = None
+
+    try:
+        # --- Crear PO con total bien por debajo del umbral ---
+        po_id = client.execute("purchase.order", "create", {
+            "partner_id": partner_ids[0],
+            "order_line": [(0, 0, {
+                "product_id": product_ids[0],
+                "product_qty": 1,
+                "price_unit": 500_000,      # $500k — bajo el umbral de $10M
+                "name": "[TEST] RG5329 threshold check",
+            })],
+        })
+        client.execute("purchase.order", "apply_rg5329_logic_manual", [po_id])
+
+        lines = client.execute(
+            "purchase.order.line", "search_read",
+            [[["order_id", "=", po_id]]],
+            fields=["id", "taxes_id"]
+        )
+        if not any(rg5329_tax_id in ln["taxes_id"] for ln in lines):
+            r.ok("PO $500k < $10M → sin percepción RG5329")
+        else:
+            r.fail("umbral PO (bajo)", "Percepción aplicada con total < $10M — ¿umbral viejo $100k activo?")
+
+        # --- Subir precio a exactamente el umbral ---
+        line_ids = [ln["id"] for ln in lines]
+        client.execute("purchase.order.line", "write", line_ids, {
+            "price_unit": 10_000_000,       # $10M — en el umbral
+        })
+        client.execute("purchase.order", "apply_rg5329_logic_manual", [po_id])
+
+        lines = client.execute(
+            "purchase.order.line", "search_read",
+            [[["order_id", "=", po_id]]],
+            fields=["taxes_id"]
+        )
+        if any(rg5329_tax_id in ln["taxes_id"] for ln in lines):
+            r.ok("PO $10M >= $10M → percepción RG5329 aplicada")
+        else:
+            r.fail("umbral PO (alto)", "Percepción NO aplicada con total >= $10M")
+
+    except Exception as e:
+        r.fail("umbral PO (ejecución)", str(e))
+    finally:
+        if po_id:
+            try:
+                client.execute("purchase.order", "button_cancel", [po_id])
+            except Exception:
+                pass
+            try:
+                client.execute("purchase.order", "unlink", [po_id])
+            except Exception:
+                pass
+
+
+def _test_sale_threshold(client: OdooClient, r: Results) -> None:
+    """Crea una SO de prueba y verifica el umbral $10M en ventas."""
+    partner_ids = client.execute(
+        "res.partner", "search",
+        [[["l10n_ar_afip_responsibility_type_id.code", "=", "1"],
+          ["rg5329_exempt", "=", False]]],
+        limit=1
+    )
+    if not partner_ids:
+        r.fail("umbral SO - partner", "No hay partners RI no exentos para probar")
+        return
+
+    product_ids = client.execute(
+        "product.product", "search",
+        [[["apply_rg5329", "=", True]]],
+        limit=1
+    )
+    if not product_ids:
+        r.fail("umbral SO - product", "No hay productos con apply_rg5329=True para probar")
+        return
+
+    tax_ids = client.execute(
+        "account.tax", "search",
+        [[["is_rg5329_perception", "=", True],
+          ["amount", "=", 3.0],
+          ["type_tax_use", "=", "sale"]]],
+        limit=1
+    )
+    if not tax_ids:
+        r.fail("umbral SO - tax", "No se encontró impuesto RG5329 de ventas (3%)")
+        return
+
+    rg5329_tax_id = tax_ids[0]
+    so_id = None
+
+    try:
+        # --- Crear SO con total bien por debajo del umbral ---
+        so_id = client.execute("sale.order", "create", {
+            "partner_id": partner_ids[0],
+            "order_line": [(0, 0, {
+                "product_id": product_ids[0],
+                "product_uom_qty": 1,
+                "price_unit": 500_000,
+                "name": "[TEST] RG5329 threshold check",
+            })],
+        })
+        client.execute("sale.order", "apply_rg5329_logic_manual", [so_id])
+
+        lines = client.execute(
+            "sale.order.line", "search_read",
+            [[["order_id", "=", so_id]]],
+            fields=["id", "tax_id"]
+        )
+        if not any(rg5329_tax_id in ln["tax_id"] for ln in lines):
+            r.ok("SO $500k < $10M → sin percepción RG5329")
+        else:
+            r.fail("umbral SO (bajo)", "Percepción aplicada con total < $10M — ¿umbral viejo $100k activo?")
+
+        # --- Subir precio a exactamente el umbral ---
+        line_ids = [ln["id"] for ln in lines]
+        client.execute("sale.order.line", "write", line_ids, {
+            "price_unit": 10_000_000,
+        })
+        client.execute("sale.order", "apply_rg5329_logic_manual", [so_id])
+
+        lines = client.execute(
+            "sale.order.line", "search_read",
+            [[["order_id", "=", so_id]]],
+            fields=["tax_id"]
+        )
+        if any(rg5329_tax_id in ln["tax_id"] for ln in lines):
+            r.ok("SO $10M >= $10M → percepción RG5329 aplicada")
+        else:
+            r.fail("umbral SO (alto)", "Percepción NO aplicada con total >= $10M")
+
+    except Exception as e:
+        r.fail("umbral SO (ejecución)", str(e))
+    finally:
+        if so_id:
+            try:
+                client.execute("sale.order", "action_cancel", [so_id])
+            except Exception:
+                pass
+            try:
+                client.execute("sale.order", "unlink", [so_id])
+            except Exception:
+                pass
+
+
 def run_tests(client: OdooClient) -> Results:
     r = Results()
 
@@ -174,11 +352,23 @@ def run_tests(client: OdooClient) -> Results:
             r.fail(f"{model}.{field}", str(e))
 
     # ------------------------------------------------------------------
-    # TEST 6: account.move carga sin errores de import
+    # TEST 7: Umbral de percepción en purchase.order ($10M)
+    # ------------------------------------------------------------------
+    print("\n[7] Umbral $10M en purchase.order")
+    _test_purchase_threshold(client, r)
+
+    # ------------------------------------------------------------------
+    # TEST 8: Umbral de percepción en sale.order ($10M)
+    # ------------------------------------------------------------------
+    print("\n[8] Umbral $10M en sale.order")
+    _test_sale_threshold(client, r)
+
+    # ------------------------------------------------------------------
+    # TEST 9: account.move carga sin errores de import
     #         Valida indirectamente que wsfe_get_cae_request no tiene
     #         errores de sintaxis o imports faltantes.
     # ------------------------------------------------------------------
-    print("\n[6] account.move (override wsfe_get_cae_request)")
+    print("\n[9] account.move (override wsfe_get_cae_request)")
     try:
         fields = client.execute(
             "account.move", "fields_get", [],

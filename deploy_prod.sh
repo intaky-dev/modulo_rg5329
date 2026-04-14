@@ -8,9 +8,10 @@ PROD_USER="PROD_USER"          # ej: ubuntu, odoo, deploy
 PROD_HOST="PROD_HOST"          # ej: 192.168.1.100 o mi-servidor.com
 MODULE_NAME="modulo_rg5329"
 REMOTE_ADDONS="/usr/lib/python3/dist-packages/odoo/addons"
+MODULE_SOURCE_PATH="$REMOTE_ADDONS/$MODULE_NAME"
 ODOO_SERVICE="odoo"
 DB_NAME="odoo"
-ODOO_BIN="/usr/bin/odoo-bin"
+ODOO_BIN="odoo"
 ODOO_SYSTEM_USER="odoo"
 LOCAL_MODULE_PATH="$(cd "$(dirname "$0")" && pwd)"
 BACKUP_DIR="$LOCAL_MODULE_PATH/backups"
@@ -93,10 +94,9 @@ ssh "$PROD_USER@$PROD_HOST" "sudo systemctl stop $ODOO_SERVICE"
 log "Ejecutando upgrade (puede tardar unos minutos)..."
 UPGRADE_OUTPUT=$(ssh "$PROD_USER@$PROD_HOST" \
     "sudo -u $ODOO_SYSTEM_USER $ODOO_BIN \
+        -c /etc/odoo/odoo.conf \
         -u $MODULE_NAME \
-        -d $DB_NAME \
         --stop-after-init \
-        --no-http \
         2>&1" || true)
 
 # Detectar errores críticos en el output del upgrade
