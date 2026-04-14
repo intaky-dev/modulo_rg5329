@@ -1,6 +1,8 @@
 from odoo import models, fields, api, _
 import logging
 
+from ..utils import telemetry as otel
+
 _logger = logging.getLogger(__name__)
 
 class AccountMove(models.Model):
@@ -145,79 +147,106 @@ class AccountMove(models.Model):
 
     def _auto_apply_rg5329_taxes(self):
         """Aplica automáticamente los impuestos RG 5329 según normativa AFIP"""
-        # Verificar si el cliente está exento
-        if self.partner_id.rg5329_exempt:
-            # Remover cualquier impuesto RG 5329 existente para clientes exentos
-            for line in self.invoice_line_ids:
-                rg5329_taxes = line.tax_ids.filtered('is_rg5329_perception')
-                if rg5329_taxes:
-                    for tax in rg5329_taxes:
-                        line.tax_ids = [(3, tax.id)]
-            return
+        with otel.start_span("rg5329.invoice.auto_apply_taxes") as span:
+            span.set_attribute("move.id", self.id or 0)
+            span.set_attribute("move.type", self.move_type or "")
+            span.set_attribute("partner.id", self.partner_id.id if self.partner_id else 0)
+            try:
+                # Verificar si el cliente está exento
+                if self.partner_id.rg5329_exempt:
+                    # Remover cualquier impuesto RG 5329 existente para clientes exentos
+                    for line in self.invoice_line_ids:
+                        rg5329_taxes = line.tax_ids.filtered('is_rg5329_perception')
+                        if rg5329_taxes:
+                            for tax in rg5329_taxes:
+                                line.tax_ids = [(3, tax.id)]
+                    otel.record_perception_skipped(order_type="invoice", reason="customer_exempt")
+                    return
 
-        # Verificar categoría fiscal del cliente
-        if not self._is_customer_eligible_for_rg5329():
-            # Remover impuestos RG 5329 si no es elegible
-            for line in self.invoice_line_ids:
-                rg5329_taxes = line.tax_ids.filtered('is_rg5329_perception')
-                if rg5329_taxes:
-                    for tax in rg5329_taxes:
-                        line.tax_ids = [(3, tax.id)]
-            return
+                # Verificar categoría fiscal del cliente
+                if not self._is_customer_eligible_for_rg5329():
+                    # Remover impuestos RG 5329 si no es elegible
+                    for line in self.invoice_line_ids:
+                        rg5329_taxes = line.tax_ids.filtered('is_rg5329_perception')
+                        if rg5329_taxes:
+                            for tax in rg5329_taxes:
+                                line.tax_ids = [(3, tax.id)]
+                    otel.record_perception_skipped(order_type="invoice", reason="not_eligible")
+                    return
 
-        # Buscar impuestos RG 5329 de forma más precisa para Odoo 18
-        try:
-            tax_3_percent = self.env['account.tax'].search([
-                ('is_rg5329_perception', '=', True),
-                ('amount', '=', 3.0),
-                ('type_tax_use', '=', 'sale')
-            ], limit=1)
+                # Buscar impuestos RG 5329 de forma más precisa para Odoo 18
+                try:
+                    tax_3_percent = self.env['account.tax'].search([
+                        ('is_rg5329_perception', '=', True),
+                        ('amount', '=', 3.0),
+                        ('type_tax_use', '=', 'sale')
+                    ], limit=1)
 
-            tax_1_5_percent = self.env['account.tax'].search([
-                ('is_rg5329_perception', '=', True),
-                ('amount', '=', 1.5),
-                ('type_tax_use', '=', 'sale')
-            ], limit=1)
+                    tax_1_5_percent = self.env['account.tax'].search([
+                        ('is_rg5329_perception', '=', True),
+                        ('amount', '=', 1.5),
+                        ('type_tax_use', '=', 'sale')
+                    ], limit=1)
 
-            if not tax_3_percent or not tax_1_5_percent:
-                _logger.warning("Impuestos RG 5329 no encontrados. "
-                              "3%%: %s, 1.5%%: %s", bool(tax_3_percent), bool(tax_1_5_percent))
-                return
+                    if not tax_3_percent or not tax_1_5_percent:
+                        _logger.warning("Impuestos RG 5329 no encontrados. "
+                                      "3%%: %s, 1.5%%: %s", bool(tax_3_percent), bool(tax_1_5_percent))
+                        otel.record_perception_skipped(order_type="invoice", reason="no_tax_found")
+                        return
 
-        except Exception as e:
-            _logger.error("Error buscando impuestos RG 5329: %s", str(e))
-            return
+                except Exception as e:
+                    span.record_exception(e)
+                    otel.record_error("AccountMove._auto_apply_rg5329_taxes")
+                    _logger.error("Error buscando impuestos RG 5329: %s", str(e))
+                    return
 
-        # NORMATIVA: Verificar mínimo sobre TOTAL de factura
-        total_invoice = self.amount_untaxed or 0
+                # NORMATIVA: Verificar mínimo sobre TOTAL de factura
+                total_invoice = self.amount_untaxed or 0
+                span.set_attribute("invoice.total_untaxed", float(total_invoice))
 
-        for line in self.invoice_line_ids:
-            if line.product_id and line.product_id.apply_rg5329:
-                # Determinar qué impuesto aplicar según IVA
-                iva_rate = self._get_line_iva_rate(line)
-                target_tax = None
+                for line in self.invoice_line_ids:
+                    if line.product_id and line.product_id.apply_rg5329:
+                        # Determinar qué impuesto aplicar según IVA
+                        iva_rate = self._get_line_iva_rate(line)
+                        target_tax = None
 
-                if iva_rate == 21.0 and tax_3_percent:
-                    target_tax = tax_3_percent
-                elif iva_rate == 10.5 and tax_1_5_percent:
-                    target_tax = tax_1_5_percent
-                else:
-                    # FALLBACK: Si no detectamos IVA específico, usar 3% por defecto
-                    # Esto maneja casos con BD limpias sin estructura fiscal argentina
-                    target_tax = tax_3_percent
-                    _logger.info("RG 5329: Aplicando impuesto 3%% por defecto para producto %s (IVA no detectado: %s)",
-                               line.product_id.name, iva_rate)
+                        if iva_rate == 21.0 and tax_3_percent:
+                            target_tax = tax_3_percent
+                            perception_rate = 3.0
+                        elif iva_rate == 10.5 and tax_1_5_percent:
+                            target_tax = tax_1_5_percent
+                            perception_rate = 1.5
+                        else:
+                            # FALLBACK: Si no detectamos IVA específico, usar 3% por defecto
+                            # Esto maneja casos con BD limpias sin estructura fiscal argentina
+                            target_tax = tax_3_percent
+                            perception_rate = 3.0
+                            _logger.info("RG 5329: Aplicando impuesto 3%% por defecto para producto %s (IVA no detectado: %s)",
+                                       line.product_id.name, iva_rate)
 
-                if target_tax:
-                    # NORMATIVA: Solo aplicar si factura total >= $10.000.000 (RG 5329)
-                    if total_invoice >= 10000000:
-                        # Agregar el impuesto si no está ya presente
-                        if target_tax not in line.tax_ids:
-                            line.tax_ids = [(4, target_tax.id)]
-                    else:
-                        # Remover el impuesto si no cumple el mínimo
-                        if target_tax in line.tax_ids:
-                            line.tax_ids = [(3, target_tax.id)]
+                        if target_tax:
+                            # NORMATIVA: Solo aplicar si factura total >= $10.000.000 (RG 5329)
+                            if total_invoice >= 10000000:
+                                # Agregar el impuesto si no está ya presente
+                                if target_tax not in line.tax_ids:
+                                    line.tax_ids = [(4, target_tax.id)]
+                                    otel.record_perception_applied(
+                                        order_type="invoice",
+                                        rate=perception_rate,
+                                        base_amount=float(line.price_subtotal),
+                                    )
+                            else:
+                                # Remover el impuesto si no cumple el mínimo
+                                if target_tax in line.tax_ids:
+                                    line.tax_ids = [(3, target_tax.id)]
+                                    otel.record_perception_skipped(
+                                        order_type="invoice",
+                                        reason="below_threshold",
+                                    )
+            except Exception as e:
+                span.record_exception(e)
+                otel.record_error("AccountMove._auto_apply_rg5329_taxes")
+                raise
 
     def wsfe_get_cae_request(self, client=None):
         """Override para inyectar CondicionIVAReceptorId requerido por RG 5616."""
