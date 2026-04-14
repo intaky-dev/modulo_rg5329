@@ -148,7 +148,7 @@ class PurchaseOrder(models.Model):
         Applies RG5329 tax automatically based on:
         1. Supplier is IVA Responsable Inscripto (code '1')
         2. Product has apply_rg5329 = True
-        3. Order total >= $100,000 (TOTAL CON IVA, no subtotal)
+        3. Order total >= $10,000,000 (TOTAL CON IVA, no subtotal)
         """
         if self.state not in ['draft', 'sent'] or self.env.context.get('applying_rg5329'):
             return True
@@ -157,7 +157,7 @@ class PurchaseOrder(models.Model):
         self.with_context(applying_rg5329=True)._amount_all()
 
         # IMPORTANTE: Calculamos el total SIN el impuesto RG5329 para evitar recursión
-        # El mínimo de $100k se refiere al total con IVA pero SIN la percepción RG5329
+        # El mínimo de $10M se refiere al total con IVA pero SIN la percepción RG5329
         rg5329_tax_amount = 0
         for line in self.order_line:
             for tax in line.taxes_id:
@@ -234,30 +234,30 @@ class PurchaseOrder(models.Model):
 
             has_tax = rg5329_tax.id in line.taxes_id.ids
 
-            if total >= 100000:
+            if total >= 10000000:
                 # ADD tax if not present
                 if not has_tax:
                     current_tax_ids = list(line.taxes_id.ids)  # Convert to list to avoid issues
                     if rg5329_tax.id not in current_tax_ids:  # Double check
                         current_tax_ids.append(rg5329_tax.id)
                         line.with_context(skip_onchange=True).write({'taxes_id': [(6, 0, current_tax_ids)]})
-                        _logger.info("RG5329 UNIFIED: ✅ ADDED tax - total $%s >= $100k", total)
+                        _logger.info("RG5329 UNIFIED: ✅ ADDED tax - total $%s >= $10M", total)
 
                         # Force UI refresh
                         self._force_ui_refresh()
                 else:
-                    _logger.info("RG5329 UNIFIED: ✅ Tax already present - total $%s >= $100k", total)
+                    _logger.info("RG5329 UNIFIED: ✅ Tax already present - total $%s >= $10M", total)
             else:
                 # REMOVE tax if present
                 if has_tax:
                     current_tax_ids = [t_id for t_id in line.taxes_id.ids if t_id != rg5329_tax.id]
                     line.with_context(skip_onchange=True).write({'taxes_id': [(6, 0, current_tax_ids)]})
-                    _logger.info("RG5329 UNIFIED: ❌ REMOVED tax - total $%s < $100k", total)
+                    _logger.info("RG5329 UNIFIED: ❌ REMOVED tax - total $%s < $10M", total)
 
                     # Force UI refresh
                     self._force_ui_refresh()
                 else:
-                    _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $100k", total)
+                    _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $10M", total)
 
         _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
         return True
@@ -376,7 +376,7 @@ class PurchaseOrderLine(models.Model):
             self.product_id and
             self.product_id.apply_rg5329 and
             self.order_id and
-            order_total_without_rg5329 >= 100000 and
+            order_total_without_rg5329 >= 10000000 and
             not (self.order_id.partner_id and self.order_id.partner_id.rg5329_exempt)
         )
 

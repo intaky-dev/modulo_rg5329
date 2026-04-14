@@ -7,7 +7,7 @@ Módulo para aplicar el régimen de percepción de IVA establecido por la RG 532
 - Percepción 3% para productos con IVA 21%
 - Percepción 1,5% para productos con IVA 10,5%
 - Configuración simple en productos para activar cálculo
-- Mínimo de $100,000 en el total de compra
+- Mínimo de $10.000.000 en el total de compra
 - Cálculo automático según alícuota de IVA
 - Creación automática de cuenta contable 2.1.3.03.041
 - Exención por cliente
