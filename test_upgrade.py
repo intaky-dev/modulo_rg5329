@@ -55,8 +55,8 @@ def _test_purchase_threshold(client: OdooClient, r: Results) -> None:
     """Crea una PO de prueba y verifica el umbral $10M en compras."""
     partner_ids = client.execute(
         "res.partner", "search",
-        [[["l10n_ar_afip_responsibility_type_id.code", "=", "1"],
-          ["rg5329_exempt", "=", False]]],
+        [["l10n_ar_afip_responsibility_type_id.code", "=", "1"],
+         ["rg5329_exempt", "=", False]],
         limit=1
     )
     if not partner_ids:
@@ -65,7 +65,7 @@ def _test_purchase_threshold(client: OdooClient, r: Results) -> None:
 
     product_ids = client.execute(
         "product.product", "search",
-        [[["apply_rg5329", "=", True]]],
+        [["apply_rg5329", "=", True]],
         limit=1
     )
     if not product_ids:
@@ -74,9 +74,9 @@ def _test_purchase_threshold(client: OdooClient, r: Results) -> None:
 
     tax_ids = client.execute(
         "account.tax", "search",
-        [[["is_rg5329_perception", "=", True],
-          ["amount", "=", 3.0],
-          ["type_tax_use", "=", "purchase"]]],
+        [["is_rg5329_perception", "=", True],
+         ["amount", "=", 3.0],
+         ["type_tax_use", "=", "purchase"]],
         limit=1
     )
     if not tax_ids:
@@ -101,7 +101,7 @@ def _test_purchase_threshold(client: OdooClient, r: Results) -> None:
 
         lines = client.execute(
             "purchase.order.line", "search_read",
-            [[["order_id", "=", po_id]]],
+            [["order_id", "=", po_id]],
             fields=["id", "taxes_id"]
         )
         if not any(rg5329_tax_id in ln["taxes_id"] for ln in lines):
@@ -118,7 +118,7 @@ def _test_purchase_threshold(client: OdooClient, r: Results) -> None:
 
         lines = client.execute(
             "purchase.order.line", "search_read",
-            [[["order_id", "=", po_id]]],
+            [["order_id", "=", po_id]],
             fields=["taxes_id"]
         )
         if any(rg5329_tax_id in ln["taxes_id"] for ln in lines):
@@ -144,8 +144,8 @@ def _test_sale_threshold(client: OdooClient, r: Results) -> None:
     """Crea una SO de prueba y verifica el umbral $10M en ventas."""
     partner_ids = client.execute(
         "res.partner", "search",
-        [[["l10n_ar_afip_responsibility_type_id.code", "=", "1"],
-          ["rg5329_exempt", "=", False]]],
+        [["l10n_ar_afip_responsibility_type_id.code", "=", "1"],
+         ["rg5329_exempt", "=", False]],
         limit=1
     )
     if not partner_ids:
@@ -154,7 +154,7 @@ def _test_sale_threshold(client: OdooClient, r: Results) -> None:
 
     product_ids = client.execute(
         "product.product", "search",
-        [[["apply_rg5329", "=", True]]],
+        [["apply_rg5329", "=", True]],
         limit=1
     )
     if not product_ids:
@@ -163,9 +163,9 @@ def _test_sale_threshold(client: OdooClient, r: Results) -> None:
 
     tax_ids = client.execute(
         "account.tax", "search",
-        [[["is_rg5329_perception", "=", True],
-          ["amount", "=", 3.0],
-          ["type_tax_use", "=", "sale"]]],
+        [["is_rg5329_perception", "=", True],
+         ["amount", "=", 3.0],
+         ["type_tax_use", "=", "sale"]],
         limit=1
     )
     if not tax_ids:
@@ -190,7 +190,7 @@ def _test_sale_threshold(client: OdooClient, r: Results) -> None:
 
         lines = client.execute(
             "sale.order.line", "search_read",
-            [[["order_id", "=", so_id]]],
+            [["order_id", "=", so_id]],
             fields=["id", "tax_id"]
         )
         if not any(rg5329_tax_id in ln["tax_id"] for ln in lines):
@@ -207,7 +207,7 @@ def _test_sale_threshold(client: OdooClient, r: Results) -> None:
 
         lines = client.execute(
             "sale.order.line", "search_read",
-            [[["order_id", "=", so_id]]],
+            [["order_id", "=", so_id]],
             fields=["tax_id"]
         )
         if any(rg5329_tax_id in ln["tax_id"] for ln in lines):
