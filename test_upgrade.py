@@ -300,7 +300,7 @@ def run_tests(client: OdooClient) -> Results:
     print("\n[3] Impuestos de percepción")
     for tax_name, expected_amount in [
         ("Percepción IVA RG 5329 - 3%", 3.0),
-        ("Percepción IVA RG 5329 - 1.5%", 1.5),
+        ("Percepción IVA RG 5329 - 1,5%", 1.5),  # coma — notación española del XML
     ]:
         tax_ids = client.execute(
             "account.tax", "search", [["name", "=", tax_name]]
