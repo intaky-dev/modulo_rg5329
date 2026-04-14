@@ -69,6 +69,8 @@ _perceptions_skipped = None
 _perception_base_amount = None
 _processing_duration = None
 _errors_counter = None
+_taxes_restored = None
+_cae_enrichments = None
 
 
 def _setup_providers_if_needed():
@@ -123,7 +125,7 @@ def _init():
     """Initialize OTel instruments. Thread-safe, idempotent."""
     global _initialized, _tracer, _meter
     global _perceptions_applied, _perceptions_skipped, _perception_base_amount
-    global _processing_duration, _errors_counter
+    global _processing_duration, _errors_counter, _taxes_restored, _cae_enrichments
 
     if _initialized or not _OTEL_AVAILABLE:
         return
@@ -163,6 +165,16 @@ def _init():
         _errors_counter = _meter.create_counter(
             name="rg5329_errors_total",
             description="Total unhandled errors in RG5329 processing methods",
+            unit="1",
+        )
+        _taxes_restored = _meter.create_counter(
+            name="rg5329_taxes_restored_total",
+            description="Total RG5329 taxes restored after order confirmation (indicates tax loss during confirm)",
+            unit="1",
+        )
+        _cae_enrichments = _meter.create_counter(
+            name="rg5329_cae_enrichments_total",
+            description="Total CAE requests enriched with CondicionIVAReceptorId (RG 5616)",
             unit="1",
         )
 
@@ -261,3 +273,31 @@ def record_processing_duration(duration_ms: float, order_type: str = "sale"):
     _init()
     if _processing_duration:
         _processing_duration.record(duration_ms, {"order_type": order_type})
+
+
+def record_taxes_restored(count: int, order_type: str = "purchase"):
+    """
+    Record that RG5329 taxes were restored after order confirmation.
+
+    A non-zero count means the confirm flow stripped the taxes and the
+    restore mechanism had to re-add them — useful to track how often
+    this safety net fires.
+
+    :param count: number of lines on which taxes were restored
+    :param order_type: "purchase" (sale orders don't go through confirm)
+    """
+    _init()
+    if _taxes_restored and count > 0:
+        _taxes_restored.add(count, {"order_type": order_type})
+
+
+def record_cae_enrichment(condicion_iva: int):
+    """
+    Record that a CAE WSFE request was enriched with CondicionIVAReceptorId
+    as required by RG 5616.
+
+    :param condicion_iva: the fiscal condition code injected into the request
+    """
+    _init()
+    if _cae_enrichments:
+        _cae_enrichments.add(1, {"condicion_iva": str(condicion_iva)})

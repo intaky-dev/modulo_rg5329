@@ -1,3 +1,5 @@
+import time
+
 from odoo import models, fields, api, _
 import logging
 
@@ -28,54 +30,77 @@ class AccountMove(models.Model):
         'invoice_line_ids.product_id'
     )
     def _compute_rg5329_perception(self):
+        _t0 = time.monotonic()
         for move in self:
-            if move.move_type not in ['out_invoice', 'out_refund'] or move.partner_id.rg5329_exempt:
-                move.rg5329_perception_amount = 0
-                move.rg5329_base_amount = 0
-                continue
+            with otel.start_span("rg5329.invoice.compute_perception") as span:
+                span.set_attribute("move.id", move.id or 0)
+                span.set_attribute("move.type", move.move_type or "")
+                span.set_attribute("partner.id", move.partner_id.id if move.partner_id else 0)
+                try:
+                    if move.move_type not in ['out_invoice', 'out_refund'] or move.partner_id.rg5329_exempt:
+                        move.rg5329_perception_amount = 0
+                        move.rg5329_base_amount = 0
+                        span.set_attribute("skipped", True)
+                        span.set_attribute("skip_reason", "wrong_type_or_exempt")
+                        continue
 
-            # Verificar categoría fiscal del cliente (solo Responsables Inscriptos)
-            if not move._is_customer_eligible_for_rg5329():
-                move.rg5329_perception_amount = 0
-                move.rg5329_base_amount = 0
-                continue
+                    # Verificar categoría fiscal del cliente (solo Responsables Inscriptos)
+                    if not move._is_customer_eligible_for_rg5329():
+                        move.rg5329_perception_amount = 0
+                        move.rg5329_base_amount = 0
+                        span.set_attribute("skipped", True)
+                        span.set_attribute("skip_reason", "not_eligible")
+                        continue
 
-            # Aplicar automáticamente impuestos RG 5329 si corresponde
-            move._auto_apply_rg5329_taxes()
+                    # Aplicar automáticamente impuestos RG 5329 si corresponde
+                    move._auto_apply_rg5329_taxes()
 
-            base_amount = 0
-            perception_amount = 0
+                    base_amount = 0
+                    perception_amount = 0
 
-            # Calcular base imponible para productos RG 5329
-            for line in move.invoice_line_ids:
-                if line.product_id and line.product_id.apply_rg5329:
-                    base_amount += line.price_subtotal
+                    # Calcular base imponible para productos RG 5329
+                    for line in move.invoice_line_ids:
+                        if line.product_id and line.product_id.apply_rg5329:
+                            base_amount += line.price_subtotal
 
-            move.rg5329_base_amount = base_amount
+                    move.rg5329_base_amount = base_amount
 
-            # NORMATIVA: Mínimo sobre TOTAL de factura ($10.000.000 según RG 5329)
-            total_invoice = move.amount_untaxed or 0
-            if total_invoice >= 10000000 and base_amount > 0:
-                for line in move.invoice_line_ids:
-                    if line.product_id and line.product_id.apply_rg5329:
-                        # Determinar alícuota según IVA del producto
-                        iva_rate = move._get_line_iva_rate(line)
-                        if iva_rate == 21.0:
-                            perception_rate = 3.0  # 3%
-                        elif iva_rate == 10.5:
-                            perception_rate = 1.5  # 1,5%
-                        else:
-                            # FALLBACK: Si no detectamos IVA específico, aplicar 3% por defecto
-                            # Esto maneja casos con BD limpias sin estructura fiscal argentina
-                            perception_rate = 3.0
-                            _logger.info("RG 5329: Aplicando 3%% por defecto para producto %s (IVA no detectado: %s)",
-                                       line.product_id.name, iva_rate)
+                    # NORMATIVA: Mínimo sobre TOTAL de factura ($10.000.000 según RG 5329)
+                    total_invoice = move.amount_untaxed or 0
+                    span.set_attribute("invoice.total_untaxed", float(total_invoice))
+                    span.set_attribute("invoice.base_amount", float(base_amount))
 
-                        if perception_rate > 0:
-                            line_perception = line.price_subtotal * (perception_rate / 100)
-                            perception_amount += line_perception
+                    if total_invoice >= 10000000 and base_amount > 0:
+                        for line in move.invoice_line_ids:
+                            if line.product_id and line.product_id.apply_rg5329:
+                                # Determinar alícuota según IVA del producto
+                                iva_rate = move._get_line_iva_rate(line)
+                                if iva_rate == 21.0:
+                                    perception_rate = 3.0  # 3%
+                                elif iva_rate == 10.5:
+                                    perception_rate = 1.5  # 1,5%
+                                else:
+                                    # FALLBACK: Si no detectamos IVA específico, aplicar 3% por defecto
+                                    perception_rate = 3.0
+                                    _logger.info("RG 5329: Aplicando 3%% por defecto para producto %s (IVA no detectado: %s)",
+                                               line.product_id.name, iva_rate)
 
-            move.rg5329_perception_amount = perception_amount
+                                if perception_rate > 0:
+                                    line_perception = line.price_subtotal * (perception_rate / 100)
+                                    perception_amount += line_perception
+
+                    move.rg5329_perception_amount = perception_amount
+                    span.set_attribute("perception_amount", float(perception_amount))
+
+                except Exception as e:
+                    span.record_exception(e)
+                    otel.record_error("AccountMove._compute_rg5329_perception")
+                    raise
+
+        otel.record_processing_duration(
+            (time.monotonic() - _t0) * 1000,
+            order_type="invoice",
+        )
 
     def _is_customer_eligible_for_rg5329(self):
         """
@@ -83,60 +108,58 @@ class AccountMove(models.Model):
         Solo aplica a Responsables Inscriptos en IVA
         Robusto para entornos de producción y testing
         """
-        try:
-            partner = self.partner_id
+        with otel.start_span("rg5329.invoice.eligibility_check") as span:
+            span.set_attribute("partner.id", self.partner_id.id if self.partner_id else 0)
+            span.set_attribute("partner.name", self.partner_id.name or "")
+            try:
+                partner = self.partner_id
 
-            # Verificar si existe el campo de responsabilidad fiscal (compatibilidad)
-            if not hasattr(partner, 'l10n_ar_afip_responsibility_type_id'):
-                _logger.warning(
-                    "Campo l10n_ar_afip_responsibility_type_id no encontrado "
-                    "en partner %s. Asumiendo NO elegible para RG 5329 "
-                    "(BD sin localización argentina completa).",
-                    partner.name
+                # Verificar si existe el campo de responsabilidad fiscal (compatibilidad)
+                if not hasattr(partner, 'l10n_ar_afip_responsibility_type_id'):
+                    _logger.warning(
+                        "Campo l10n_ar_afip_responsibility_type_id no encontrado "
+                        "en partner %s. Asumiendo NO elegible para RG 5329 "
+                        "(BD sin localización argentina completa).",
+                        partner.name
+                    )
+                    span.set_attribute("eligible", False)
+                    span.set_attribute("skip_reason", "no_afip_field")
+                    return False
+
+                # Verificar si tiene responsabilidad fiscal configurada
+                if not partner.l10n_ar_afip_responsibility_type_id:
+                    _logger.debug(
+                        "Partner %s sin responsabilidad fiscal configurada, "
+                        "asumiendo NO elegible para RG 5329",
+                        partner.name
+                    )
+                    span.set_attribute("eligible", False)
+                    span.set_attribute("skip_reason", "no_responsibility_configured")
+                    return False
+
+                # Solo aplicar a Responsables Inscriptos (código IVA_RI)
+                responsibility_code = partner.l10n_ar_afip_responsibility_type_id.code
+                is_eligible = responsibility_code == '1'
+
+                span.set_attribute("partner.afip_code", responsibility_code or "")
+                span.set_attribute("eligible", is_eligible)
+
+                if not is_eligible:
+                    _logger.debug("Partner %s con código %s no elegible para RG 5329",
+                                partner.name, responsibility_code)
+
+                return is_eligible
+
+            except Exception as e:
+                span.record_exception(e)
+                otel.record_error("AccountMove._is_customer_eligible_for_rg5329")
+                _logger.error(
+                    "Error inesperado verificando elegibilidad RG 5329 "
+                    "para partner %s: %s. Asumiendo NO elegible.",
+                    self.partner_id.name if self.partner_id else 'Unknown',
+                    str(e)
                 )
-                # FIXED: Si no hay localización argentina, asumir NO elegible por defecto
                 return False
-
-            # Verificar si tiene responsabilidad fiscal configurada
-            if not partner.l10n_ar_afip_responsibility_type_id:
-                _logger.info(
-                    "Partner %s sin responsabilidad fiscal configurada, "
-                    "asumiendo NO elegible para RG 5329",
-                    partner.name
-                )
-                # FIXED: Si no está configurado, asumir NO elegible por defecto
-                return False
-
-            # Solo aplicar a Responsables Inscriptos (código IVA_RI)
-            responsibility_code = partner.l10n_ar_afip_responsibility_type_id.code
-
-            # Códigos válidos para RG 5329 según normativa ARCA
-            valid_codes = ['1']  # Solo código 1: IVA Responsable Inscripto
-
-            is_eligible = responsibility_code in valid_codes
-
-            if not is_eligible:
-                _logger.debug("Partner %s con código %s no elegible para RG 5329",
-                            partner.name, responsibility_code)
-
-            return is_eligible
-
-        except AttributeError as e:
-            _logger.warning(
-                "Error accediendo a campos AFIP en partner %s: %s. "
-                "Asumiendo NO elegible para RG 5329.",
-                self.partner_id.name if self.partner_id else 'Unknown',
-                str(e)
-            )
-            return False  # FIXED: Asumir NO elegible en caso de error
-        except Exception as e:
-            _logger.error(
-                "Error inesperado verificando elegibilidad RG 5329 "
-                "para partner %s: %s. Asumiendo NO elegible.",
-                self.partner_id.name if self.partner_id else 'Unknown',
-                str(e)
-            )
-            return False  # FIXED: Asumir NO elegible en caso de error
 
     def _get_line_iva_rate(self, line):
         """Obtiene la alícuota de IVA de una línea"""
@@ -250,14 +273,26 @@ class AccountMove(models.Model):
 
     def wsfe_get_cae_request(self, client=None):
         """Override para inyectar CondicionIVAReceptorId requerido por RG 5616."""
-        res = super().wsfe_get_cae_request(client=client)
-        partner = self.commercial_partner_id
-        responsibility = partner.l10n_ar_afip_responsibility_type_id
-        condicion_iva = 5  # Consumidor Final como fallback
-        if responsibility and responsibility.code:
+        with otel.start_span("rg5329.invoice.wsfe_cae_request") as span:
+            span.set_attribute("move.id", self.id or 0)
+            span.set_attribute("move.name", self.name or "")
+            span.set_attribute("move.type", self.move_type or "")
+            span.set_attribute("partner.id", self.commercial_partner_id.id if self.commercial_partner_id else 0)
             try:
-                condicion_iva = int(responsibility.code)
-            except (ValueError, TypeError):
-                pass
-        res['FeDetReq'][0]['FECAEDetRequest']['CondicionIVAReceptorId'] = condicion_iva
-        return res
+                res = super().wsfe_get_cae_request(client=client)
+                partner = self.commercial_partner_id
+                responsibility = partner.l10n_ar_afip_responsibility_type_id
+                condicion_iva = 5  # Consumidor Final como fallback
+                if responsibility and responsibility.code:
+                    try:
+                        condicion_iva = int(responsibility.code)
+                    except (ValueError, TypeError):
+                        pass
+                res['FeDetReq'][0]['FECAEDetRequest']['CondicionIVAReceptorId'] = condicion_iva
+                span.set_attribute("condicion_iva", condicion_iva)
+                otel.record_cae_enrichment(condicion_iva)
+                return res
+            except Exception as e:
+                span.record_exception(e)
+                otel.record_error("AccountMove.wsfe_get_cae_request")
+                raise

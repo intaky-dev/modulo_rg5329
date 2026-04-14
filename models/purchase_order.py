@@ -54,27 +54,35 @@ class PurchaseOrder(models.Model):
 
     def button_confirm(self):
         """Override button_confirm to ensure RG5329 taxes are applied and preserved"""
-        # STEP 1: Apply RG5329 logic one last time before confirming
-        for order in self:
-            if not self.env.context.get('skip_rg5329_confirm'):
-                _logger.info("RG5329: Applying logic before confirming order %s (state: %s)", order.name, order.state)
-                if order.state in ['draft', 'sent']:
-                    order._apply_rg5329_logic()
-                    order._amount_all()
-                    _logger.debug("RG5329: After applying logic - Total: %s, Tax: %s", order.amount_total, order.amount_tax)
+        with otel.start_span("rg5329.purchase.button_confirm") as span:
+            span.set_attribute("order.count", len(self))
+            span.set_attribute("order.names", ", ".join(o.name or "New" for o in self))
+            try:
+                # STEP 1: Apply RG5329 logic one last time before confirming
+                for order in self:
+                    if not self.env.context.get('skip_rg5329_confirm'):
+                        _logger.info("RG5329: Applying logic before confirming order %s (state: %s)", order.name, order.state)
+                        if order.state in ['draft', 'sent']:
+                            order._apply_rg5329_logic()
+                            order._amount_all()
+                            _logger.debug("RG5329: After applying logic - Total: %s, Tax: %s", order.amount_total, order.amount_tax)
 
-                    # STEP 2: Store RG5329 tax info BEFORE confirmation to prevent loss
-                    order._store_rg5329_taxes_before_confirm()
+                            # STEP 2: Store RG5329 tax info BEFORE confirmation to prevent loss
+                            order._store_rg5329_taxes_before_confirm()
 
-        # STEP 3: Call super to continue with normal confirmation
-        result = super().button_confirm()
+                # STEP 3: Call super to continue with normal confirmation
+                result = super().button_confirm()
 
-        # STEP 4: CRITICAL - Restore RG5329 taxes AFTER confirmation if they were removed
-        for order in self:
-            if not self.env.context.get('skip_rg5329_confirm'):
-                order._restore_rg5329_taxes_after_confirm()
+                # STEP 4: CRITICAL - Restore RG5329 taxes AFTER confirmation if they were removed
+                for order in self:
+                    if not self.env.context.get('skip_rg5329_confirm'):
+                        order._restore_rg5329_taxes_after_confirm()
 
-        return result
+                return result
+            except Exception as e:
+                span.record_exception(e)
+                otel.record_error("PurchaseOrder.button_confirm")
+                raise
 
     def _store_rg5329_taxes_before_confirm(self):
         """
@@ -141,6 +149,7 @@ class PurchaseOrder(models.Model):
 
         if restored_count > 0:
             _logger.info("RG5329 RESTORE: ✅ Restored RG5329 tax to %d lines", restored_count)
+            otel.record_taxes_restored(restored_count, order_type="purchase")
             # Force recalculation of totals
             self._amount_all()
         else:
