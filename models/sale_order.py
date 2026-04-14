@@ -18,7 +18,7 @@ class SaleOrder(models.Model):
     def apply_rg5329_via_js(self):
         """Public method for JavaScript to trigger RG5329 logic"""
         try:
-            _logger.info("RG5329 JS: JavaScript trigger called for order %s", self.name)
+            _logger.debug("RG5329 JS: JavaScript trigger called for order %s", self.name)
             self._apply_rg5329_logic()
 
             # Force UI refresh by invalidating cache
@@ -96,7 +96,7 @@ class SaleOrder(models.Model):
                 total = self.amount_untaxed or 0
                 span.set_attribute("order.total_untaxed", float(total))
                 span.set_attribute("order.line_count", len(self.order_line))
-                _logger.info("=== RG5329 UNIFIED: Processing order %s with total $%s ===", self.name or 'New', total)
+                _logger.debug("=== RG5329 UNIFIED: Processing order %s with total $%s ===", self.name or 'New', total)
 
                 # Find RG5329 tax
                 rg5329_tax = self.env['account.tax'].sudo().search([
@@ -110,29 +110,29 @@ class SaleOrder(models.Model):
                     otel.record_perception_skipped(order_type="sale", reason="no_tax_found")
                     return False
 
-                _logger.info("RG5329 UNIFIED: Found RG5329 tax: %s (ID: %s)", rg5329_tax.name, rg5329_tax.id)
+                _logger.debug("RG5329 UNIFIED: Found RG5329 tax: %s (ID: %s)", rg5329_tax.name, rg5329_tax.id)
 
                 # Debug order line info
-                _logger.info("RG5329 DEBUG: Order has %d lines", len(self.order_line))
-                _logger.info("RG5329 DEBUG: Order line IDs: %s", [line.id for line in self.order_line])
+                _logger.debug("RG5329 DEBUG: Order has %d lines", len(self.order_line))
+                _logger.debug("RG5329 DEBUG: Order line IDs: %s", [line.id for line in self.order_line])
 
                 # Process all lines at once
                 line_count = 0
                 for line in self.order_line:
                     line_count += 1
-                    _logger.info("RG5329 DEBUG: Processing line with product: %s",
+                    _logger.debug("RG5329 DEBUG: Processing line with product: %s",
                                 line.product_id.name if line.product_id else 'No product')
 
                     # Only process products marked for RG5329
                     if not (line.product_id and line.product_id.apply_rg5329):
-                        _logger.info("RG5329 DEBUG: Skipping line - product not marked for RG5329")
+                        _logger.debug("RG5329 DEBUG: Skipping line - product not marked for RG5329")
                         continue
 
-                    _logger.info("RG5329 DEBUG: Line has RG5329 product, checking customer conditions...")
+                    _logger.debug("RG5329 DEBUG: Line has RG5329 product, checking customer conditions...")
 
                     # Skip if customer is exempt
                     if self.partner_id and self.partner_id.rg5329_exempt:
-                        _logger.info("RG5329 DEBUG: Customer is exempt")
+                        _logger.debug("RG5329 DEBUG: Customer is exempt")
                         # Remove tax if customer is exempt
                         if rg5329_tax.id in line.tax_id.ids:
                             new_taxes = line.tax_id.filtered(lambda t: t.id != rg5329_tax.id)
@@ -141,11 +141,11 @@ class SaleOrder(models.Model):
                         otel.record_perception_skipped(order_type="sale", reason="customer_exempt")
                         continue
 
-                    _logger.info("RG5329 DEBUG: Customer not exempt, checking eligibility...")
+                    _logger.debug("RG5329 DEBUG: Customer not exempt, checking eligibility...")
 
                     # Check if customer is eligible (only Responsable Inscripto)
                     if not self._is_customer_eligible_for_rg5329():
-                        _logger.info("RG5329 DEBUG: Customer not eligible for RG5329")
+                        _logger.debug("RG5329 DEBUG: Customer not eligible for RG5329")
                         # Remove tax if customer not eligible
                         if rg5329_tax.id in line.tax_id.ids:
                             new_taxes = line.tax_id.filtered(lambda t: t.id != rg5329_tax.id)
@@ -154,7 +154,7 @@ class SaleOrder(models.Model):
                         otel.record_perception_skipped(order_type="sale", reason="not_eligible")
                         continue
 
-                    _logger.info("RG5329 DEBUG: Customer eligible! Proceeding with tax logic...")
+                    _logger.debug("RG5329 DEBUG: Customer eligible! Proceeding with tax logic...")
 
                     has_tax = rg5329_tax.id in line.tax_id.ids
 
@@ -187,7 +187,7 @@ class SaleOrder(models.Model):
                         else:
                             _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $10M", total)
 
-                _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
+                _logger.debug("RG5329 DEBUG: Processed %d lines total", line_count)
                 return True
             except Exception as e:
                 span.record_exception(e)
@@ -217,7 +217,7 @@ class SaleOrder(models.Model):
                     return False
 
                 if not partner.l10n_ar_afip_responsibility_type_id:
-                    _logger.info("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
+                    _logger.debug("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
                     span.set_attribute("eligible", False)
                     span.set_attribute("skip_reason", "no_responsibility_configured")
                     return False
@@ -227,7 +227,7 @@ class SaleOrder(models.Model):
 
                 span.set_attribute("partner.afip_code", responsibility_code or "")
                 span.set_attribute("eligible", is_eligible)
-                _logger.info("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
+                _logger.debug("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
                             partner.name, responsibility_code, is_eligible)
 
                 return is_eligible
@@ -255,7 +255,7 @@ class SaleOrder(models.Model):
                     {'order_id': self.id}
                 )
 
-            _logger.info("RG5329 UNIFIED: UI refresh triggered")
+            _logger.debug("RG5329 UNIFIED: UI refresh triggered")
 
         except Exception as e:
             _logger.error("RG5329 UNIFIED: Error forcing UI refresh: %s", str(e))
@@ -264,7 +264,7 @@ class SaleOrder(models.Model):
     def _onchange_partner_rg5329_unified(self):
         """Trigger RG5329 recalculation when partner changes"""
         if self.partner_id and not self.env.context.get('skip_onchange'):
-            _logger.info("RG5329 UNIFIED: Partner changed, triggering logic...")
+            _logger.debug("RG5329 UNIFIED: Partner changed, triggering logic...")
             self._apply_rg5329_logic()
 
     def _compute_amounts(self):
@@ -283,7 +283,7 @@ class SaleOrder(models.Model):
                         for line in order.order_line
                     )
                     if has_rg5329_products:
-                        _logger.info("RG5329 UNIFIED: Amounts computed, checking RG5329 logic...")
+                        _logger.debug("RG5329 UNIFIED: Amounts computed, checking RG5329 logic...")
                         order.with_context(skip_rg5329_auto=True)._apply_rg5329_logic()
 
         return result
@@ -297,7 +297,7 @@ class SaleOrderLine(models.Model):
         if (self.order_id and
             not self.env.context.get('applying_rg5329') and
             not self.env.context.get('skip_onchange')):
-            _logger.info("RG5329 UNIFIED: Line changed, triggering logic...")
+            _logger.debug("RG5329 UNIFIED: Line changed, triggering logic...")
             self.order_id._apply_rg5329_logic()
 
     def write(self, vals):
@@ -319,7 +319,7 @@ class SaleOrderLine(models.Model):
             # Trigger for all affected orders with context to prevent loops
             for order_id in orders_to_recalc:
                 order = self.env['sale.order'].browse(order_id)
-                _logger.info("RG5329 UNIFIED: Line write triggered for order %s", order.name)
+                _logger.debug("RG5329 UNIFIED: Line write triggered for order %s", order.name)
                 order.with_context(skip_onchange=True)._apply_rg5329_logic()
 
         return result

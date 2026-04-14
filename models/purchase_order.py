@@ -61,7 +61,7 @@ class PurchaseOrder(models.Model):
                 if order.state in ['draft', 'sent']:
                     order._apply_rg5329_logic()
                     order._amount_all()
-                    _logger.info("RG5329: After applying logic - Total: %s, Tax: %s", order.amount_total, order.amount_tax)
+                    _logger.debug("RG5329: After applying logic - Total: %s, Tax: %s", order.amount_total, order.amount_tax)
 
                     # STEP 2: Store RG5329 tax info BEFORE confirmation to prevent loss
                     order._store_rg5329_taxes_before_confirm()
@@ -95,12 +95,12 @@ class PurchaseOrder(models.Model):
         for line in self.order_line:
             if rg5329_tax.id in line.taxes_id.ids:
                 lines_with_rg5329.append(line.id)
-                _logger.info("RG5329 STORE: Line %s (product: %s) has RG5329 tax before confirmation",
+                _logger.debug("RG5329 STORE: Line %s (product: %s) has RG5329 tax before confirmation",
                            line.id, line.product_id.name if line.product_id else 'No product')
 
         # Store in context for later retrieval
         self.env.context = dict(self.env.context, rg5329_lines_before_confirm=lines_with_rg5329)
-        _logger.info("RG5329 STORE: Stored %d lines with RG5329 tax", len(lines_with_rg5329))
+        _logger.debug("RG5329 STORE: Stored %d lines with RG5329 tax", len(lines_with_rg5329))
 
     def _restore_rg5329_taxes_after_confirm(self):
         """
@@ -110,7 +110,7 @@ class PurchaseOrder(models.Model):
         # Get stored line IDs from context
         lines_with_rg5329 = self.env.context.get('rg5329_lines_before_confirm', [])
         if not lines_with_rg5329:
-            _logger.info("RG5329 RESTORE: No lines to restore")
+            _logger.debug("RG5329 RESTORE: No lines to restore")
             return
 
         rg5329_tax = self.env['account.tax'].sudo().search([
@@ -137,14 +137,14 @@ class PurchaseOrder(models.Model):
                     line.write({'taxes_id': [(6, 0, current_tax_ids)]})
                     restored_count += 1
                 else:
-                    _logger.info("RG5329 RESTORE: Tax still present on line %s - OK", line.id)
+                    _logger.debug("RG5329 RESTORE: Tax still present on line %s - OK", line.id)
 
         if restored_count > 0:
             _logger.info("RG5329 RESTORE: ✅ Restored RG5329 tax to %d lines", restored_count)
             # Force recalculation of totals
             self._amount_all()
         else:
-            _logger.info("RG5329 RESTORE: All taxes preserved correctly")
+            _logger.debug("RG5329 RESTORE: All taxes preserved correctly")
 
     def _apply_rg5329_logic(self):
         """
@@ -185,7 +185,7 @@ class PurchaseOrder(models.Model):
                 total = (self.amount_total or 0) - rg5329_tax_amount
                 span.set_attribute("order.total_without_rg5329", float(total))
                 span.set_attribute("order.line_count", len(self.order_line))
-                _logger.info("=== RG5329 UNIFIED: Processing purchase order %s with total $%s (with VAT, without RG5329) ===",
+                _logger.debug("=== RG5329 UNIFIED: Processing purchase order %s with total $%s (with VAT, without RG5329) ===",
                             self.name or 'New', total)
 
                 # Find RG5329 tax for purchases
@@ -200,29 +200,29 @@ class PurchaseOrder(models.Model):
                     otel.record_perception_skipped(order_type="purchase", reason="no_tax_found")
                     return False
 
-                _logger.info("RG5329 UNIFIED: Found RG5329 tax: %s (ID: %s)", rg5329_tax.name, rg5329_tax.id)
+                _logger.debug("RG5329 UNIFIED: Found RG5329 tax: %s (ID: %s)", rg5329_tax.name, rg5329_tax.id)
 
                 # Debug order line info
-                _logger.info("RG5329 DEBUG: Purchase order has %d lines", len(self.order_line))
-                _logger.info("RG5329 DEBUG: Purchase order line IDs: %s", [line.id for line in self.order_line])
+                _logger.debug("RG5329 DEBUG: Purchase order has %d lines", len(self.order_line))
+                _logger.debug("RG5329 DEBUG: Purchase order line IDs: %s", [line.id for line in self.order_line])
 
                 # Process all lines at once
                 line_count = 0
                 for line in self.order_line:
                     line_count += 1
-                    _logger.info("RG5329 DEBUG: Processing line with product: %s",
+                    _logger.debug("RG5329 DEBUG: Processing line with product: %s",
                                 line.product_id.name if line.product_id else 'No product')
 
                     # Only process products marked for RG5329
                     if not (line.product_id and line.product_id.apply_rg5329):
-                        _logger.info("RG5329 DEBUG: Skipping line - product not marked for RG5329")
+                        _logger.debug("RG5329 DEBUG: Skipping line - product not marked for RG5329")
                         continue
 
-                    _logger.info("RG5329 DEBUG: Line has RG5329 product, checking supplier conditions...")
+                    _logger.debug("RG5329 DEBUG: Line has RG5329 product, checking supplier conditions...")
 
                     # Skip if supplier is exempt
                     if self.partner_id and self.partner_id.rg5329_exempt:
-                        _logger.info("RG5329 DEBUG: Supplier is exempt")
+                        _logger.debug("RG5329 DEBUG: Supplier is exempt")
                         # Remove tax if supplier is exempt
                         if rg5329_tax.id in line.taxes_id.ids:
                             new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
@@ -231,11 +231,11 @@ class PurchaseOrder(models.Model):
                         otel.record_perception_skipped(order_type="purchase", reason="customer_exempt")
                         continue
 
-                    _logger.info("RG5329 DEBUG: Supplier not exempt, checking eligibility...")
+                    _logger.debug("RG5329 DEBUG: Supplier not exempt, checking eligibility...")
 
                     # Check if supplier is eligible (only Responsable Inscripto)
                     if not self._is_partner_eligible_for_rg5329():
-                        _logger.info("RG5329 DEBUG: Supplier not eligible for RG5329")
+                        _logger.debug("RG5329 DEBUG: Supplier not eligible for RG5329")
                         # Remove tax if supplier not eligible
                         if rg5329_tax.id in line.taxes_id.ids:
                             new_taxes = line.taxes_id.filtered(lambda t: t.id != rg5329_tax.id)
@@ -244,7 +244,7 @@ class PurchaseOrder(models.Model):
                         otel.record_perception_skipped(order_type="purchase", reason="not_eligible")
                         continue
 
-                    _logger.info("RG5329 DEBUG: Supplier eligible! Proceeding with tax logic...")
+                    _logger.debug("RG5329 DEBUG: Supplier eligible! Proceeding with tax logic...")
 
                     has_tax = rg5329_tax.id in line.taxes_id.ids
 
@@ -277,7 +277,7 @@ class PurchaseOrder(models.Model):
                         else:
                             _logger.info("RG5329 UNIFIED: ❌ Tax already not present - total $%s < $10M", total)
 
-                _logger.info("RG5329 DEBUG: Processed %d lines total", line_count)
+                _logger.debug("RG5329 DEBUG: Processed %d lines total", line_count)
                 return True
             except Exception as e:
                 span.record_exception(e)
@@ -307,7 +307,7 @@ class PurchaseOrder(models.Model):
                     return False
 
                 if not partner.l10n_ar_afip_responsibility_type_id:
-                    _logger.info("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
+                    _logger.debug("RG5329 UNIFIED: Partner %s - no fiscal responsibility configured", partner.name)
                     span.set_attribute("eligible", False)
                     span.set_attribute("skip_reason", "no_responsibility_configured")
                     return False
@@ -317,7 +317,7 @@ class PurchaseOrder(models.Model):
 
                 span.set_attribute("partner.afip_code", responsibility_code or "")
                 span.set_attribute("eligible", is_eligible)
-                _logger.info("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
+                _logger.debug("RG5329 UNIFIED: Partner %s - code %s - eligible: %s",
                             partner.name, responsibility_code, is_eligible)
 
                 return is_eligible
@@ -345,7 +345,7 @@ class PurchaseOrder(models.Model):
                     {'order_id': self.id}
                 )
 
-            _logger.info("RG5329 UNIFIED: UI refresh triggered")
+            _logger.debug("RG5329 UNIFIED: UI refresh triggered")
 
         except Exception as e:
             _logger.error("RG5329 UNIFIED: Error forcing UI refresh: %s", str(e))
@@ -354,7 +354,7 @@ class PurchaseOrder(models.Model):
     def _onchange_partner_rg5329_unified(self):
         """Trigger RG5329 recalculation when partner changes"""
         if self.partner_id and not self.env.context.get('skip_onchange'):
-            _logger.info("RG5329 UNIFIED: Partner changed, triggering logic...")
+            _logger.debug("RG5329 UNIFIED: Partner changed, triggering logic...")
             self._apply_rg5329_logic()
 
     def _amount_all(self):
@@ -373,7 +373,7 @@ class PurchaseOrder(models.Model):
                         for line in order.order_line
                     )
                     if has_rg5329_products:
-                        _logger.info("RG5329 UNIFIED: Amounts computed, checking RG5329 logic...")
+                        _logger.debug("RG5329 UNIFIED: Amounts computed, checking RG5329 logic...")
                         order.with_context(skip_rg5329_auto=True)._apply_rg5329_logic()
 
         return result
@@ -425,14 +425,14 @@ class PurchaseOrderLine(models.Model):
             current_tax_ids.append(rg5329_tax.id)
             self.write({'taxes_id': [(6, 0, current_tax_ids)]})
 
-        _logger.info("RG5329: Getting stock move price unit for line with product %s, taxes: %s",
+        _logger.debug("RG5329: Getting stock move price unit for line with product %s, taxes: %s",
                      self.product_id.name if self.product_id else 'No product',
                      [t.name for t in self.taxes_id])
 
         # Call super with taxes properly set
         result = super()._get_stock_move_price_unit()
 
-        _logger.info("RG5329: Stock move price unit calculated: %s (taxes used: %s)",
+        _logger.debug("RG5329: Stock move price unit calculated: %s (taxes used: %s)",
                      result, [t.name for t in self.taxes_id])
         return result
 
@@ -442,7 +442,7 @@ class PurchaseOrderLine(models.Model):
         if (self.order_id and
             not self.env.context.get('applying_rg5329') and
             not self.env.context.get('skip_onchange')):
-            _logger.info("RG5329 UNIFIED: Line changed, triggering logic...")
+            _logger.debug("RG5329 UNIFIED: Line changed, triggering logic...")
             self.order_id._apply_rg5329_logic()
 
     def write(self, vals):
@@ -464,7 +464,7 @@ class PurchaseOrderLine(models.Model):
             # Trigger for all affected orders with context to prevent loops
             for order_id in orders_to_recalc:
                 order = self.env['purchase.order'].browse(order_id)
-                _logger.info("RG5329 UNIFIED: Line write triggered for purchase order %s", order.name)
+                _logger.debug("RG5329 UNIFIED: Line write triggered for purchase order %s", order.name)
                 order.with_context(skip_onchange=True)._apply_rg5329_logic()
 
         return result
