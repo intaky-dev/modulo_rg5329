@@ -155,12 +155,12 @@ def _init():
         _perception_base_amount = _meter.create_histogram(
             name="rg5329_perception_base_amount_ars",
             description="Base line subtotal (ARS) on which RG5329 perception was applied",
-            unit="ARS",
+            unit="1",
         )
         _processing_duration = _meter.create_histogram(
             name="rg5329_apply_logic_duration_ms",
             description="Wall-clock duration of _apply_rg5329_logic() in milliseconds",
-            unit="ms",
+            unit="1",
         )
         _errors_counter = _meter.create_counter(
             name="rg5329_errors_total",
